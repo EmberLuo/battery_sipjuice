@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>电源助手</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 顶部状态条 -->
+    <header class="topbar">
+      <div class="title-group">
+        <div class="app-icon" id="appIcon">🔋</div>
+        <div>
+          <h1>电源助手</h1>
+          <p class="subtitle" id="modelName">读取中…</p>
+        </div>
+      </div>
+      <div class="status-pill" id="statusPill">
+        <span class="dot"></span>
+        <span id="statusText">—</span>
+      </div>
+    </header>
+
+    <!-- 标签导航 -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">概览</button>
+      <button class="tab" data-tab="health">健康</button>
+      <button class="tab" data-tab="power">电源</button>
+      <button class="tab" data-tab="control">充电控制</button>
+    </nav>
+
+    <main class="content">
+      <!-- 概览 -->
+      <section class="panel active" id="overview">
+        <div class="hero-card">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120">
+              <circle class="ring-bg" cx="60" cy="60" r="52" />
+              <circle class="ring-fg" id="ring" cx="60" cy="60" r="52" />
+            </svg>
+            <div class="ring-center">
+              <span class="big-pct" id="capacity">--</span>
+              <span class="pct-sign">%</span>
+            </div>
+          </div>
+          <div class="hero-meta">
+            <div class="meta-row"><span>状态</span><b id="hStatus">—</b></div>
+            <div class="meta-row"><span>剩余时间</span><b id="hTime">—</b></div>
+            <div class="meta-row"><span>功率</span><b id="hPower">—</b></div>
+            <div class="meta-row"><span>温度</span><b id="hTemp">—</b></div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="stat-card">
+            <span class="stat-label">电压</span>
+            <span class="stat-value" id="oVoltage">—</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">电流</span>
+            <span class="stat-value" id="oCurrent">—</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">循环次数</span>
+            <span class="stat-value" id="oCycles">—</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">健康度</span>
+            <span class="stat-value" id="oHealth">—</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 健康 -->
+      <section class="panel" id="health">
+        <div class="health-headline">
+          <div class="health-score" id="healthScore">--<small>%</small></div>
+          <div class="health-bar-wrap">
+            <div class="health-bar"><div class="health-bar-fill" id="healthBar"></div></div>
+            <p class="health-note" id="healthNote">电池健康 = 当前满电容量 / 设计容量</p>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="stat-card"><span class="stat-label">实际满电容量</span><span class="stat-value" id="capNow">—</span></div>
+          <div class="stat-card"><span class="stat-label">设计容量</span><span class="stat-value" id="capDesign">—</span></div>
+          <div class="stat-card"><span class="stat-label">已损耗</span><span class="stat-value" id="capLost">—</span></div>
+          <div class="stat-card"><span class="stat-label">充电循环</span><span class="stat-value" id="hCycles">—</span></div>
+          <div class="stat-card"><span class="stat-label">健康状态</span><span class="stat-value" id="hHealthStatus">—</span></div>
+          <div class="stat-card"><span class="stat-label">SoH</span><span class="stat-value" id="hSoh">—</span></div>
+          <div class="stat-card"><span class="stat-label">电池技术</span><span class="stat-value" id="hTech">—</span></div>
+          <div class="stat-card"><span class="stat-label">内阻</span><span class="stat-value" id="hResistance">—</span></div>
+        </div>
+      </section>
+
+      <!-- 电源 -->
+      <section class="panel" id="power">
+        <div class="grid">
+          <div class="stat-card"><span class="stat-label">瞬时电压</span><span class="stat-value" id="pVoltage">—</span></div>
+          <div class="stat-card"><span class="stat-label">开路电压(OCV)</span><span class="stat-value" id="pOcv">—</span></div>
+          <div class="stat-card"><span class="stat-label">最大电压</span><span class="stat-value" id="pVmax">—</span></div>
+          <div class="stat-card"><span class="stat-label">瞬时电流</span><span class="stat-value" id="pCurrent">—</span></div>
+        </div>
+        <h3 class="section-h">输入电源</h3>
+        <div id="sourceList" class="source-list">
+          <p class="empty-hint">未检测到外接电源</p>
+        </div>
+      </section>
+
+      <!-- 充电控制 -->
+      <section class="panel" id="control">
+        <div class="warn-banner" id="ccBanner">
+          <span class="warn-icon">⚠️</span>
+          <div>
+            <b>实验性功能</b>
+            <p id="ccNote">正在检测充电阈值接口…</p>
+          </div>
+        </div>
+        <div class="control-card" id="ccCard">
+          <div class="threshold-row">
+            <label>恢复充电阈值 <span id="startVal">75</span>%</label>
+            <input type="range" id="startSlider" min="0" max="100" value="75" />
+          </div>
+          <div class="threshold-row">
+            <label>充电封顶阈值 <span id="endVal">80</span>%</label>
+            <input type="range" id="endSlider" min="0" max="100" value="80" />
+          </div>
+          <button class="apply-btn" id="applyBtn" disabled>应用阈值</button>
+          <p class="apply-result" id="applyResult"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="lastUpdate">—</span>
+      <span class="dev-tag">本机直读 sysfs · 无网络上报</span>
+    </footer>
+  </div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

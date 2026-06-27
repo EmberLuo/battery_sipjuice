@@ -1,0 +1,11 @@
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Node
+node_modules/
+
+# 构建产物
+dist/
+*.AppImage
+*.deb
