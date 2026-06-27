@@ -1,4 +1,4 @@
-// 电源助手 — 前端逻辑
+// Battery SipJuice — 前端逻辑
 // 使用全局注入的 Tauri API（withGlobalTauri: true），无需打包器即可在 WebKitGTK 运行。
 const { invoke } = window.__TAURI__.core;
 

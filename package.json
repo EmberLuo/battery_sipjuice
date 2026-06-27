@@ -1,8 +1,8 @@
 {
-  "name": "battery-assistant",
+  "name": "battery-sipjuice",
   "private": true,
   "version": "0.1.0",
-  "description": "电源助手 — Linux 电池监控与健康管理工具",
+  "description": "Battery SipJuice — Linux 电池监控与健康管理工具",
   "license": "MIT",
   "type": "module",
   "scripts": {

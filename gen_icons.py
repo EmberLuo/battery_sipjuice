@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成电源助手应用图标 — 简洁的电池+闪电造型，Adwaita 蓝。"""
+"""生成 Battery SipJuice 应用图标 — 简洁的电池+闪电造型，Adwaita 蓝。"""
 from PIL import Image, ImageDraw
 import os
 

@@ -1,4 +1,4 @@
-//! 本机电源助手 — 库入口。
+//! Battery SipJuice — 库入口。
 
 mod battery;
 mod charge_control;

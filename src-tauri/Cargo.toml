@@ -1,13 +1,13 @@
 [package]
-name = "battery-assistant"
+name = "battery-sipjuice"
 version = "0.1.0"
-description = "电源助手 — Linux 电池监控与健康管理"
-authors = ["battery_assistant"]
+description = "Battery SipJuice — Linux 电池监控与健康管理"
+authors = ["battery_sipjuice"]
 license = "MIT"
 edition = "2021"
 
 [lib]
-name = "battery_assistant_lib"
+name = "battery_sipjuice_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "电源助手",
+  "productName": "Battery SipJuice",
   "version": "0.1.0",
-  "identifier": "com.batteryassistant.app",
+  "identifier": "com.batterysipjuice.app",
   "build": {
     "frontendDist": "../src"
   },
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "电源助手",
+        "title": "Battery SipJuice",
         "width": 980,
         "height": 720,
         "minWidth": 720,
@@ -34,7 +34,7 @@
     ],
     "category": "Utility",
     "shortDescription": "本机电池监控与健康管理",
-    "longDescription": "Linux 电源助手：电池健康、实时电气量、充放电监控、温度与充电控制（实验性）。"
+    "longDescription": "Battery SipJuice — Linux 电源工具：电池健康、实时电气量、充放电监控、温度与充电控制（实验性）。"
   },
   "plugins": {}
 }

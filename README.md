@@ -1,4 +1,4 @@
-# 电源助手 (Battery Assistant)
+# Battery SipJuice
 
 一个 Linux 电池监控与健康管理小工具。基于 Tauri v2 + Rust + 原生 Web，直读 Linux `power_supply` sysfs 接口，无任何网络上报。
 
