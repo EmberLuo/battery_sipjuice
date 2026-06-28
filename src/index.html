@@ -26,9 +26,9 @@
     <!-- 标签导航 -->
     <nav class="tabs">
       <button class="tab active" data-tab="overview">概览</button>
+      <button class="tab" data-tab="monitor">监测</button>
       <button class="tab" data-tab="health">健康</button>
-      <button class="tab" data-tab="power">电源</button>
-      <button class="tab" data-tab="control">充电控制</button>
+      <button class="tab" data-tab="settings">设置</button>
     </nav>
 
     <main class="content">
@@ -55,20 +55,20 @@
 
         <div class="grid">
           <div class="stat-card">
-            <span class="stat-label">电压</span>
-            <span class="stat-value" id="oVoltage">—</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">电流</span>
-            <span class="stat-value" id="oCurrent">—</span>
+            <span class="stat-label">健康度</span>
+            <span class="stat-value" id="oHealth">—</span>
           </div>
           <div class="stat-card">
             <span class="stat-label">循环次数</span>
             <span class="stat-value" id="oCycles">—</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">健康度</span>
-            <span class="stat-value" id="oHealth">—</span>
+            <span class="stat-label">实际满电容量</span>
+            <span class="stat-value" id="oCapNow">—</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">设计容量</span>
+            <span class="stat-value" id="oCapDesign">—</span>
           </div>
         </div>
       </section>
@@ -94,22 +94,95 @@
         </div>
       </section>
 
-      <!-- 电源 -->
-      <section class="panel" id="power">
+      <!-- 监测：实时电气读数 + 实时滚动曲线 + 充电输入 -->
+      <section class="panel" id="monitor">
         <div class="grid">
           <div class="stat-card"><span class="stat-label">瞬时电压</span><span class="stat-value" id="pVoltage">—</span></div>
           <div class="stat-card"><span class="stat-label">开路电压(OCV)</span><span class="stat-value" id="pOcv">—</span></div>
           <div class="stat-card"><span class="stat-label">最大电压</span><span class="stat-value" id="pVmax">—</span></div>
           <div class="stat-card"><span class="stat-label">瞬时电流</span><span class="stat-value" id="pCurrent">—</span></div>
+          <div class="stat-card"><span class="stat-label">功率</span><span class="stat-value" id="pPower">—</span></div>
+          <div class="stat-card"><span class="stat-label">温度</span><span class="stat-value" id="pTemp">—</span></div>
         </div>
+
+        <div class="chart-card">
+          <div class="chart-controls">
+            <div class="chip-row" id="metricChips">
+              <button class="chip active" data-metric="cap">电量 %</button>
+              <button class="chip" data-metric="pow">功率 W</button>
+              <button class="chip" data-metric="temp">温度 °C</button>
+              <button class="chip" data-metric="volt">电压 V</button>
+              <button class="chip" data-metric="curr">电流 mA</button>
+            </div>
+            <div class="chip-row" id="rangeChips">
+              <button class="chip range active" data-range="300000">5 分</button>
+              <button class="chip range" data-range="1800000">30 分</button>
+              <button class="chip range" data-range="21600000">6 时</button>
+              <button class="chip range" data-range="86400000">24 时</button>
+              <button class="chip range" data-range="604800000">7 天</button>
+            </div>
+          </div>
+          <div class="chart-area">
+            <svg class="chart-svg" id="chartSvg" viewBox="0 0 600 240" preserveAspectRatio="none"></svg>
+            <p class="chart-empty" id="chartEmpty">正在采集数据…曲线会随时间逐渐填充。</p>
+          </div>
+          <div class="chart-legend">
+            <span class="lg-band"></span> 充电时段
+            <span class="lg-sep">·</span>
+            <span class="lg-line"></span> <span id="chartMetricName">电量</span>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="stat-card"><span class="stat-label">当前</span><span class="stat-value" id="sCur">—</span></div>
+          <div class="stat-card"><span class="stat-label">区间最小</span><span class="stat-value" id="sMin">—</span></div>
+          <div class="stat-card"><span class="stat-label">区间最大</span><span class="stat-value" id="sMax">—</span></div>
+          <div class="stat-card"><span class="stat-label">区间平均</span><span class="stat-value" id="sAvg">—</span></div>
+        </div>
+
         <h3 class="section-h">输入电源</h3>
         <div id="sourceList" class="source-list">
           <p class="empty-hint">未检测到外接电源</p>
         </div>
       </section>
 
-      <!-- 充电控制 -->
-      <section class="panel" id="control">
+      <!-- 设置 -->
+      <section class="panel" id="settings">
+        <h3 class="section-h">常规</h3>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name">开机自启动</div>
+              <div class="setting-desc">登录系统后自动启动 Battery SipJuice</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setAutostart" />
+              <span class="slider-sw"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name">静默启动</div>
+              <div class="setting-desc">启动时不显示窗口，仅在系统托盘运行</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setSilentStart" />
+              <span class="slider-sw"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name">关闭按钮行为</div>
+              <div class="setting-desc">点击窗口关闭按钮(✕)时的动作</div>
+            </div>
+            <select class="setting-select" id="setCloseAction">
+              <option value="ask">每次询问</option>
+              <option value="tray">最小化到托盘</option>
+              <option value="exit">退出应用</option>
+            </select>
+          </div>
+        </div>
+
+        <h3 class="section-h">充电控制</h3>
         <div class="warn-banner" id="ccBanner">
           <span class="warn-icon">⚠️</span>
           <div>
@@ -129,6 +202,13 @@
           <button class="apply-btn" id="applyBtn" disabled>应用阈值</button>
           <p class="apply-result" id="applyResult"></p>
         </div>
+
+        <h3 class="section-h">关于</h3>
+        <div class="about-card">
+          <div class="meta-row"><span>应用</span><b>Battery SipJuice</b></div>
+          <div class="meta-row"><span>版本</span><b id="aboutVersion">0.2.0</b></div>
+          <div class="meta-row"><span>数据来源</span><b>本机 sysfs · 无网络上报</b></div>
+        </div>
       </section>
     </main>
 
@@ -137,6 +217,24 @@
       <span class="dev-tag">本机直读 sysfs · 无网络上报</span>
     </footer>
   </div>
+
+  <!-- 关闭确认弹框 -->
+  <div class="modal-overlay" id="closeModal">
+    <div class="modal">
+      <div class="modal-title">关闭 Battery SipJuice</div>
+      <p class="modal-body">你希望退出应用，还是最小化到系统托盘继续后台监控？</p>
+      <label class="modal-remember">
+        <input type="checkbox" id="closeRemember" />
+        <span>记住我的选择，不再询问</span>
+      </label>
+      <div class="modal-actions">
+        <button class="modal-btn ghost" id="closeCancel">取消</button>
+        <button class="modal-btn" id="closeTray">最小化到托盘</button>
+        <button class="modal-btn danger" id="closeQuit">退出</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="main.js"></script>
 </body>
 </html>

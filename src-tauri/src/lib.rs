@@ -3,16 +3,135 @@
 mod battery;
 mod charge_control;
 mod commands;
+mod history;
 mod power;
+mod settings;
+
+use std::time::Duration;
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager, WindowEvent,
+};
+use tauri_plugin_autostart::MacosLauncher;
+
+/// 后台采样间隔: 30 秒。
+const SAMPLE_INTERVAL: Duration = Duration::from_secs(30);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .setup(|app| {
+            // 历史数据落在应用数据目录下的 history.rdb (定长 RRD 风格归档)。
+            // 若存在旧版 history.jsonl 会在 load 时自动迁移。
+            let data_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&data_dir)?;
+            let hist = history::HistoryStore::load(data_dir.join("history.rdb"));
+            app.manage(hist);
+
+            // 设置落在应用配置目录下的 settings.json。
+            let cfg_dir = app.path().app_config_dir()?;
+            std::fs::create_dir_all(&cfg_dir)?;
+            let settings_store = settings::SettingsStore::load(cfg_dir.join("settings.json"));
+            let current = settings_store.get();
+            app.manage(settings_store);
+
+            // 系统托盘 + 右键菜单（显示窗口 / 退出）。
+            let show_item = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+            let menu = MenuBuilder::new(app)
+                .item(&show_item)
+                .separator()
+                .item(&quit_item)
+                .build()?;
+            let mut tray = TrayIconBuilder::with_id("main-tray")
+                .tooltip("Battery SipJuice")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // 左键点击托盘图标显示窗口（部分 Linux 托盘不发此事件，菜单为兜底）。
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon().cloned() {
+                tray = tray.icon(icon);
+            }
+            tray.build(app)?;
+
+            // 关闭按钮(X)拦截：按设置决定退出 / 最小化到托盘 / 弹框询问。
+            if let Some(window) = app.get_webview_window("main") {
+                let handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        let action = handle.state::<settings::SettingsStore>().get().close_action;
+                        match action {
+                            // Exit: 不拦截，窗口关闭 → 应用退出。
+                            settings::CloseAction::Exit => {}
+                            settings::CloseAction::Tray => {
+                                api.prevent_close();
+                                if let Some(w) = handle.get_webview_window("main") {
+                                    let _ = w.hide();
+                                }
+                            }
+                            settings::CloseAction::Ask => {
+                                api.prevent_close();
+                                // 通知前端弹出确认框。
+                                let _ = handle.emit("close-requested", ());
+                            }
+                        }
+                    }
+                });
+
+                // 静默启动：不显示窗口，仅托盘（窗口配置默认 visible:false）。
+                if !current.silent_start {
+                    let _ = window.show();
+                }
+            }
+
+            // 后台同步线程定时采样(读 sysfs + 写文件均为同步操作，用 std 线程即可)。
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                handle.state::<history::HistoryStore>().tick();
+                loop {
+                    std::thread::sleep(SAMPLE_INTERVAL);
+                    handle.state::<history::HistoryStore>().tick();
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_snapshot,
             commands::set_charge_threshold,
+            commands::get_history,
+            commands::get_settings,
+            commands::save_settings,
+            commands::hide_window,
+            commands::quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");
+}
+
+/// 显示并聚焦主窗口。
+fn show_main<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
 }

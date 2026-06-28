@@ -1,6 +1,7 @@
 // Battery SipJuice — 前端逻辑
 // 使用全局注入的 Tauri API（withGlobalTauri: true），无需打包器即可在 WebKitGTK 运行。
 const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
 
 const RING_CIRCUM = 2 * Math.PI * 52; // 与 styles.css 的 r=52 一致
 
@@ -80,11 +81,11 @@ function renderBattery(b) {
   $("hPower").textContent = b.power_now == null ? "—" : `${fmt(Math.abs(b.power_now), 2)} W`;
   $("hTemp").textContent = b.temperature == null ? "—" : `${fmt(b.temperature, 1)} °C`;
 
-  // 概览统计
-  $("oVoltage").textContent = b.voltage_now == null ? "—" : `${fmt(b.voltage_now, 3)} V`;
-  $("oCurrent").textContent = b.current_now == null ? "—" : `${fmt(b.current_now, 0)} mA`;
-  $("oCycles").textContent = b.cycle_count ?? "—";
+  // 概览摘要（仪表盘：寿命 + 容量，原始电气读数归监测页）
   $("oHealth").textContent = `${fmt(b.health_percent, 1)} %`;
+  $("oCycles").textContent = b.cycle_count ?? "—";
+  $("oCapNow").textContent = valueWithUnit(b.full_capacity, 0);
+  $("oCapDesign").textContent = valueWithUnit(b.design_capacity, 0);
 
   // 健康页
   $("healthScore").innerHTML = `${fmt(b.health_percent, 1)}<small>%</small>`;
@@ -101,11 +102,13 @@ function renderBattery(b) {
   $("hTech").textContent = b.technology || "—";
   $("hResistance").textContent = b.internal_resistance == null ? "—" : `${fmt(b.internal_resistance, 0)} mΩ`;
 
-  // 电源页（电池侧电气量）
+  // 监测页（电池侧实时电气量）
   $("pVoltage").textContent = b.voltage_now == null ? "—" : `${fmt(b.voltage_now, 3)} V`;
   $("pOcv").textContent = b.voltage_ocv == null ? "—" : `${fmt(b.voltage_ocv, 3)} V`;
   $("pVmax").textContent = b.voltage_max == null ? "—" : `${fmt(b.voltage_max, 3)} V`;
   $("pCurrent").textContent = b.current_now == null ? "—" : `${fmt(b.current_now, 0)} mA`;
+  $("pPower").textContent = b.power_now == null ? "—" : `${fmt(Math.abs(b.power_now), 2)} W`;
+  $("pTemp").textContent = b.temperature == null ? "—" : `${fmt(b.temperature, 1)} °C`;
 }
 
 function renderSources(sources) {
@@ -187,6 +190,217 @@ $("applyBtn").addEventListener("click", async () => {
   }
 });
 
+// ---------- 监测曲线（实时滚动 + 多档分时）----------
+const METRICS = {
+  cap:  { name: "电量", unit: "%",  decimals: 0, signed: false, clamp: [0, 100] },
+  pow:  { name: "功率", unit: "W",  decimals: 2, signed: true },
+  temp: { name: "温度", unit: "°C", decimals: 1, signed: false },
+  volt: { name: "电压", unit: "V",  decimals: 3, signed: false },
+  curr: { name: "电流", unit: "mA", decimals: 0, signed: true },
+};
+
+const MONITOR = { metric: "cap", rangeMs: 300000 };
+// 仅 5 分档从前端实时缓冲区绘制(2 秒一帧平滑滚动)；≥30 分一律查后端 RRD 归档
+// (30s/5min 粒度足够，且能显示打开软件之前的历史)。
+const LIVE_MAX_MS = 300000;   // ≤ 此范围用实时缓冲
+const BUFFER_MAX_MS = 600000; // 缓冲保留 10 分钟，为 5 分窗口留 2× 余量
+const rtBuffer = [];
+let lastSamples = [];
+
+const isMonitorActive = () => $("monitor").classList.contains("active");
+
+// 把一帧快照转成与后端 Sample 一致的样本（功率带符号：放电为负）。
+function pushBuffer(b, tMs) {
+  const chg = b.status === "Charging";
+  const mag = b.power_now == null ? null : Math.abs(b.power_now);
+  rtBuffer.push({
+    t: tMs,
+    cap: b.capacity ?? null,
+    temp: b.temperature ?? null,
+    pow: mag == null ? null : chg ? mag : -mag,
+    volt: b.voltage_now ?? null,
+    curr: b.current_now ?? null,
+    chg,
+  });
+  const cutoff = tMs - BUFFER_MAX_MS;
+  while (rtBuffer.length && rtBuffer[0].t < cutoff) rtBuffer.shift();
+}
+
+// 启动时用后端 RRD 归档预填实时缓冲区，使 5 分档一打开就能显示打开软件之前的数据。
+// 后端为 30s 粒度的历史，随后由实时 tick 追加 2s 粒度的新点；二者按时间天然衔接。
+async function seedBuffer() {
+  try {
+    const hist = await invoke("get_history", { rangeMs: BUFFER_MAX_MS });
+    if (Array.isArray(hist) && hist.length) {
+      // 仅插入早于当前缓冲最早点的历史，避免与已采集的实时点重叠/乱序。
+      const earliest = rtBuffer.length ? rtBuffer[0].t : Infinity;
+      const older = hist.filter((s) => s.t < earliest);
+      if (older.length) rtBuffer.unshift(...older);
+    }
+  } catch (err) {
+    console.error("预填历史失败:", err);
+  }
+}
+
+function fmtAxisTime(ms, rangeMs) {
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, "0");
+  if (rangeMs >= 604800000) return `${d.getMonth() + 1}/${d.getDate()}`;
+  if (rangeMs >= 86400000) return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}h`;
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+async function refreshChart() {
+  const r = MONITOR.rangeMs;
+  let samples;
+  if (r <= LIVE_MAX_MS) {
+    const cutoff = Date.now() - r;
+    samples = rtBuffer.filter((s) => s.t >= cutoff);
+  } else {
+    try {
+      samples = await invoke("get_history", { rangeMs: r });
+    } catch (err) {
+      console.error(err);
+      return;
+    }
+  }
+  renderChart(samples);
+}
+
+function renderChart(samples) {
+  const m = METRICS[MONITOR.metric];
+  $("chartMetricName").textContent = m.name;
+  const vals = samples.map((s) => s[MONITOR.metric]).filter((v) => v != null);
+
+  if (samples.length < 2 || vals.length === 0) {
+    $("chartSvg").innerHTML = "";
+    $("chartEmpty").style.display = "block";
+    ["sCur", "sMin", "sMax", "sAvg"].forEach((id) => ($(id).textContent = "—"));
+    lastSamples = [];
+    return;
+  }
+  $("chartEmpty").style.display = "none";
+  lastSamples = samples;
+  drawChart(samples, MONITOR.metric);
+
+  const f = (v) => `${fmt(v, m.decimals)} ${m.unit}`;
+  $("sCur").textContent = f(vals[vals.length - 1]);
+  $("sMin").textContent = f(Math.min(...vals));
+  $("sMax").textContent = f(Math.max(...vals));
+  $("sAvg").textContent = f(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
+function drawChart(samples, metric) {
+  const m = METRICS[metric];
+  const svg = $("chartSvg");
+  const W = svg.clientWidth || 600;
+  const H = svg.clientHeight || 240;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+  const padL = 46, padR = 14, padT = 14, padB = 24;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const ts = samples.map((s) => s.t);
+  // 时间轴：右边缘钉在"现在"，窗口宽度固定为所选档位，曲线随时间往左滚动。
+  const tMax = Date.now();
+  const tMin = tMax - MONITOR.rangeMs;
+  const tSpan = Math.max(1, tMax - tMin);
+  const vals = samples.map((s) => s[metric]);
+  const present = vals.filter((v) => v != null);
+
+  let yMin = Math.min(...present), yMax = Math.max(...present);
+  if (m.signed) { yMin = Math.min(yMin, 0); yMax = Math.max(yMax, 0); }
+  if (yMin === yMax) { yMin -= 1; yMax += 1; }
+  const padY = (yMax - yMin) * 0.1;
+  yMin -= padY; yMax += padY;
+  if (m.clamp) { yMin = Math.max(m.clamp[0], yMin); yMax = Math.min(m.clamp[1], yMax); }
+
+  const X = (t) => padL + ((t - tMin) / tSpan) * plotW;
+  const Y = (v) => padT + ((yMax - v) / (yMax - yMin)) * plotH;
+
+  // 充电时段背景带
+  let bands = "";
+  for (let i = 0; i < samples.length - 1; i++) {
+    if (samples[i].chg) {
+      const x0 = X(ts[i]), x1 = X(ts[i + 1]);
+      bands += `<rect x="${x0.toFixed(1)}" y="${padT}" width="${Math.max(0.5, x1 - x0).toFixed(1)}" height="${plotH}" class="chg-band"/>`;
+    }
+  }
+
+  // 网格线 + Y 轴标签
+  let grid = "";
+  for (const lv of [yMax, (yMax + yMin) / 2, yMin]) {
+    const y = Y(lv);
+    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" class="grid-line"/>`;
+    grid += `<text x="${padL - 6}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" class="axis-label">${fmt(lv, m.decimals)}</text>`;
+  }
+
+  // 0 基线（带符号指标）
+  let zero = "";
+  if (m.signed && yMin < 0 && yMax > 0) {
+    const y0 = Y(0).toFixed(1);
+    zero = `<line x1="${padL}" y1="${y0}" x2="${W - padR}" y2="${y0}" class="zero-line"/>`;
+  }
+
+  // 连续段（遇 null 断开）
+  const segs = [];
+  let seg = [];
+  for (let i = 0; i < samples.length; i++) {
+    if (vals[i] == null) { if (seg.length) { segs.push(seg); seg = []; } continue; }
+    seg.push([X(ts[i]), Y(vals[i])]);
+  }
+  if (seg.length) segs.push(seg);
+
+  const baseY = m.signed && yMin < 0 && yMax > 0 ? Y(0) : padT + plotH;
+  const pt = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
+  const line = segs.map((s) => "M" + s.map(pt).join(" L")).join(" ");
+  const area = segs
+    .map((s) => `M${s[0][0].toFixed(1)} ${baseY.toFixed(1)} L${s.map(pt).join(" L")} L${s[s.length - 1][0].toFixed(1)} ${baseY.toFixed(1)} Z`)
+    .join(" ");
+
+  // X 轴时间标签
+  let xlabels = "";
+  for (let i = 0; i <= 4; i++) {
+    const t = tMin + (tSpan * i) / 4;
+    const anchor = i === 0 ? "start" : i === 4 ? "end" : "middle";
+    xlabels += `<text x="${X(t).toFixed(1)}" y="${H - 7}" text-anchor="${anchor}" class="axis-label">${fmtAxisTime(t, MONITOR.rangeMs)}</text>`;
+  }
+
+  const defs = `<defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.28"/>
+    <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02"/>
+  </linearGradient></defs>`;
+
+  svg.innerHTML =
+    defs + bands + grid + zero +
+    `<path d="${area}" class="chart-area-fill"/>` +
+    `<path d="${line}" class="chart-line"/>` +
+    xlabels;
+}
+
+// 指标 / 范围 chip 切换
+function wireChips(rowId, key, parse) {
+  $(rowId).addEventListener("click", (e) => {
+    const btn = e.target.closest(".chip");
+    if (!btn) return;
+    [...$(rowId).children].forEach((c) => c.classList.remove("active"));
+    btn.classList.add("active");
+    MONITOR[key] = parse(btn.dataset[key === "metric" ? "metric" : "range"]);
+    refreshChart();
+  });
+}
+wireChips("metricChips", "metric", (v) => v);
+wireChips("rangeChips", "rangeMs", (v) => parseInt(v, 10));
+
+// 切到监测标签时立即刷新；窗口缩放时重绘
+document.querySelectorAll(".tab").forEach((tab) => {
+  if (tab.dataset.tab === "monitor") tab.addEventListener("click", refreshChart);
+});
+window.addEventListener("resize", () => {
+  if (isMonitorActive() && lastSamples.length) drawChart(lastSamples, MONITOR.metric);
+});
+
 // ---------- 轮询 ----------
 async function tick() {
   try {
@@ -194,6 +408,9 @@ async function tick() {
     renderBattery(snap.battery);
     renderSources(snap.sources);
     renderChargeControl(snap.charge_control);
+    if (snap.battery) pushBuffer(snap.battery, snap.timestamp_ms);
+    // 监测页可见时跟随主轮询实时刷新曲线（短档平滑滚动，长档查后端历史）。
+    if (isMonitorActive()) refreshChart();
     const d = new Date(snap.timestamp_ms);
     $("lastUpdate").textContent = `更新于 ${d.toLocaleTimeString("zh-CN")}`;
   } catch (err) {
@@ -204,3 +421,74 @@ async function tick() {
 
 tick();
 setInterval(tick, 2000);
+
+// 预填历史缓冲，完成后若监测页可见则立即重绘短档曲线。
+seedBuffer().then(() => {
+  if (isMonitorActive()) refreshChart();
+});
+
+// ---------- 设置 ----------
+let settings = { autostart: false, silent_start: false, close_action: "ask" };
+
+async function loadSettings() {
+  try {
+    settings = await invoke("get_settings");
+    $("setAutostart").checked = settings.autostart;
+    $("setSilentStart").checked = settings.silent_start;
+    $("setCloseAction").value = settings.close_action;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function persistSettings() {
+  try {
+    await invoke("save_settings", { newSettings: settings });
+  } catch (err) {
+    console.error("保存设置失败:", err);
+  }
+}
+
+$("setAutostart").addEventListener("change", (e) => {
+  settings.autostart = e.target.checked;
+  persistSettings();
+});
+$("setSilentStart").addEventListener("change", (e) => {
+  settings.silent_start = e.target.checked;
+  persistSettings();
+});
+$("setCloseAction").addEventListener("change", (e) => {
+  settings.close_action = e.target.value;
+  persistSettings();
+});
+
+// ---------- 关闭确认弹框 ----------
+const closeModal = $("closeModal");
+const showModal = () => closeModal.classList.add("show");
+const hideModal = () => closeModal.classList.remove("show");
+
+// 后端拦截窗口关闭后发来事件 → 弹框询问（仅 close_action=ask 时触发）。
+listen("close-requested", () => showModal());
+
+$("closeCancel").addEventListener("click", hideModal);
+
+$("closeTray").addEventListener("click", () => {
+  if ($("closeRemember").checked) {
+    settings.close_action = "tray";
+    $("setCloseAction").value = "tray";
+    persistSettings();
+  }
+  hideModal();
+  invoke("hide_window");
+});
+
+$("closeQuit").addEventListener("click", () => {
+  if ($("closeRemember").checked) {
+    settings.close_action = "exit";
+    $("setCloseAction").value = "exit";
+    persistSettings();
+  }
+  invoke("quit_app");
+});
+
+loadSettings();
