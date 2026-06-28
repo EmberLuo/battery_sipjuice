@@ -174,11 +174,18 @@
               <div class="setting-name">关闭按钮行为</div>
               <div class="setting-desc">点击窗口关闭按钮(✕)时的动作</div>
             </div>
-            <select class="setting-select" id="setCloseAction">
-              <option value="ask">每次询问</option>
-              <option value="tray">最小化到托盘</option>
-              <option value="exit">退出应用</option>
-            </select>
+            <div class="setting-dropdown" id="closeActionDropdown">
+              <input type="hidden" id="setCloseAction" value="ask" />
+              <button class="setting-select" id="setCloseActionButton" type="button" aria-haspopup="listbox" aria-expanded="false">
+                <span id="setCloseActionLabel">每次询问</span>
+                <span class="select-caret"></span>
+              </button>
+              <div class="setting-menu" id="setCloseActionMenu" role="listbox" aria-label="关闭按钮行为">
+                <button type="button" role="option" data-value="ask" aria-selected="true">每次询问</button>
+                <button type="button" role="option" data-value="tray" aria-selected="false">最小化到托盘</button>
+                <button type="button" role="option" data-value="exit" aria-selected="false">退出应用</button>
+              </div>
+            </div>
           </div>
         </div>
 

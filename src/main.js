@@ -204,6 +204,9 @@ const MONITOR = { metric: "cap", rangeMs: 300000 };
 // (30s/5min 粒度足够，且能显示打开软件之前的历史)。
 const LIVE_MAX_MS = 300000;   // ≤ 此范围用实时缓冲
 const BUFFER_MAX_MS = 600000; // 缓冲保留 10 分钟，为 5 分窗口留 2× 余量
+const HISTORY_FINE_STEP_MS = 30_000;
+const HISTORY_COARSE_STEP_MS = 300_000;
+const HISTORY_MAX_POINTS = 240;
 const rtBuffer = [];
 let lastSamples = [];
 
@@ -318,11 +321,12 @@ function drawChart(samples, metric) {
 
   const X = (t) => padL + ((t - tMin) / tSpan) * plotW;
   const Y = (v) => padT + ((yMax - v) / (yMax - yMin)) * plotH;
+  const gapThreshold = continuityGapThreshold();
 
   // 充电时段背景带
   let bands = "";
   for (let i = 0; i < samples.length - 1; i++) {
-    if (samples[i].chg) {
+    if (samples[i].chg && ts[i + 1] - ts[i] <= gapThreshold) {
       const x0 = X(ts[i]), x1 = X(ts[i + 1]);
       bands += `<rect x="${x0.toFixed(1)}" y="${padT}" width="${Math.max(0.5, x1 - x0).toFixed(1)}" height="${plotH}" class="chg-band"/>`;
     }
@@ -347,7 +351,11 @@ function drawChart(samples, metric) {
   const segs = [];
   let seg = [];
   for (let i = 0; i < samples.length; i++) {
-    if (vals[i] == null) { if (seg.length) { segs.push(seg); seg = []; } continue; }
+    const disconnected = i > 0 && ts[i] - ts[i - 1] > gapThreshold;
+    if (vals[i] == null || disconnected) {
+      if (seg.length) { segs.push(seg); seg = []; }
+      if (vals[i] == null) continue;
+    }
     seg.push([X(ts[i]), Y(vals[i])]);
   }
   if (seg.length) segs.push(seg);
@@ -377,6 +385,12 @@ function drawChart(samples, metric) {
     `<path d="${area}" class="chart-area-fill"/>` +
     `<path d="${line}" class="chart-line"/>` +
     xlabels;
+}
+
+function continuityGapThreshold() {
+  const sourceStep = MONITOR.rangeMs > 86400000 ? HISTORY_COARSE_STEP_MS : HISTORY_FINE_STEP_MS;
+  const effectiveStep = Math.max(sourceStep, MONITOR.rangeMs / HISTORY_MAX_POINTS);
+  return effectiveStep * 2.5;
 }
 
 // 指标 / 范围 chip 切换
@@ -429,13 +443,34 @@ seedBuffer().then(() => {
 
 // ---------- 设置 ----------
 let settings = { autostart: false, silent_start: false, close_action: "ask" };
+const CLOSE_ACTION_LABELS = {
+  ask: "每次询问",
+  tray: "最小化到托盘",
+  exit: "退出应用",
+};
+
+function setCloseActionDropdownOpen(open) {
+  $("closeActionDropdown").classList.toggle("open", open);
+  $("setCloseActionButton").setAttribute("aria-expanded", String(open));
+}
+
+function setCloseActionValue(value, shouldPersist = false) {
+  const next = CLOSE_ACTION_LABELS[value] ? value : "ask";
+  settings.close_action = next;
+  $("setCloseAction").value = next;
+  $("setCloseActionLabel").textContent = CLOSE_ACTION_LABELS[next];
+  document.querySelectorAll("#setCloseActionMenu [data-value]").forEach((item) => {
+    item.setAttribute("aria-selected", String(item.dataset.value === next));
+  });
+  if (shouldPersist) persistSettings();
+}
 
 async function loadSettings() {
   try {
     settings = await invoke("get_settings");
     $("setAutostart").checked = settings.autostart;
     $("setSilentStart").checked = settings.silent_start;
-    $("setCloseAction").value = settings.close_action;
+    setCloseActionValue(settings.close_action);
   } catch (err) {
     console.error(err);
   }
@@ -457,9 +492,20 @@ $("setSilentStart").addEventListener("change", (e) => {
   settings.silent_start = e.target.checked;
   persistSettings();
 });
-$("setCloseAction").addEventListener("change", (e) => {
-  settings.close_action = e.target.value;
-  persistSettings();
+$("setCloseActionButton").addEventListener("click", () => {
+  setCloseActionDropdownOpen(!$("closeActionDropdown").classList.contains("open"));
+});
+$("setCloseActionMenu").addEventListener("click", (e) => {
+  const item = e.target.closest("[data-value]");
+  if (!item) return;
+  setCloseActionValue(item.dataset.value, true);
+  setCloseActionDropdownOpen(false);
+});
+document.addEventListener("click", (e) => {
+  if (!$("closeActionDropdown").contains(e.target)) setCloseActionDropdownOpen(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setCloseActionDropdownOpen(false);
 });
 
 // ---------- 关闭确认弹框 ----------
@@ -475,7 +521,7 @@ $("closeCancel").addEventListener("click", hideModal);
 $("closeTray").addEventListener("click", () => {
   if ($("closeRemember").checked) {
     settings.close_action = "tray";
-    $("setCloseAction").value = "tray";
+    setCloseActionValue("tray");
     persistSettings();
   }
   hideModal();
@@ -485,7 +531,7 @@ $("closeTray").addEventListener("click", () => {
 $("closeQuit").addEventListener("click", () => {
   if ($("closeRemember").checked) {
     settings.close_action = "exit";
-    $("setCloseAction").value = "exit";
+    setCloseActionValue("exit");
     persistSettings();
   }
   invoke("quit_app");
