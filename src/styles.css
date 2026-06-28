@@ -387,6 +387,24 @@ body {
 .setting-name { font-size: 14px; font-weight: 600; }
 .setting-desc { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; }
 
+.section-sub { font-size: 12.5px; color: var(--text-dim); margin: 4px 0 0; line-height: 1.5; }
+
+.setting-trailing { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+.threshold-input {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 13.5px; color: var(--text-dim);
+}
+.threshold-input input {
+  width: 52px; text-align: center;
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 6px 4px;
+}
+.threshold-input input:focus { outline: none; border-color: var(--accent); }
+.threshold-input input:disabled { opacity: 0.45; cursor: not-allowed; }
+
 .setting-dropdown {
   position: relative;
   flex-shrink: 0;

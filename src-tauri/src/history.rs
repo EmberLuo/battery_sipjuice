@@ -131,7 +131,13 @@ impl Slot {
             ..Slot::default()
         };
         let mut o = 16;
-        for a in [&mut s.cap, &mut s.temp, &mut s.pow, &mut s.volt, &mut s.curr] {
+        for a in [
+            &mut s.cap,
+            &mut s.temp,
+            &mut s.pow,
+            &mut s.volt,
+            &mut s.curr,
+        ] {
             a.sum = f64a(o);
             a.cnt = u32a(o + 8);
             o += 12;
@@ -454,8 +460,24 @@ mod tests {
     fn consolidates_average_within_bucket() {
         let mut arc = Archive::new(STEP_FINE_MS, 10);
         // 同一 30s 桶内的两个样本: t=0 与 t=10s。
-        arc.add(0, Some(20.0), Some(30.0), Some(-5.0), Some(3.7), Some(-1000.0), false);
-        arc.add(10_000, Some(30.0), Some(32.0), Some(-7.0), Some(3.9), Some(-1200.0), false);
+        arc.add(
+            0,
+            Some(20.0),
+            Some(30.0),
+            Some(-5.0),
+            Some(3.7),
+            Some(-1000.0),
+            false,
+        );
+        arc.add(
+            10_000,
+            Some(30.0),
+            Some(32.0),
+            Some(-7.0),
+            Some(3.9),
+            Some(-1200.0),
+            false,
+        );
         let s = arc.samples_since(0, 20_000);
         assert_eq!(s.len(), 1, "两样本落入同一桶应合并为一点");
         assert_eq!(s[0].cap, Some(25)); // (20+30)/2
@@ -502,22 +524,52 @@ mod tests {
     fn ring_wraps_and_overwrites() {
         let mut arc = Archive::new(STEP_FINE_MS, 3); // 仅 3 槽
         for i in 0..5u64 {
-            arc.add(i * STEP_FINE_MS, Some(i as f64), None, None, None, None, false);
+            arc.add(
+                i * STEP_FINE_MS,
+                Some(i as f64),
+                None,
+                None,
+                None,
+                None,
+                false,
+            );
         }
         // 只剩最近 3 个桶 (i=2,3,4)。
         let s = arc.samples_since(0, 5 * STEP_FINE_MS);
         assert_eq!(s.len(), 3);
-        assert_eq!(s.iter().map(|x| x.cap.unwrap()).collect::<Vec<_>>(), vec![2, 3, 4]);
+        assert_eq!(
+            s.iter().map(|x| x.cap.unwrap()).collect::<Vec<_>>(),
+            vec![2, 3, 4]
+        );
     }
 
     /// 二进制序列化往返应完全还原归档内容。
     #[test]
     fn binary_round_trip() {
         let mut a = Archives::new();
-        a.add(0, Some(42.0), Some(25.5), Some(-3.3), Some(3.8), Some(-900.0), true);
-        a.add(STEP_FINE_MS, Some(43.0), None, Some(-4.4), None, None, false);
+        a.add(
+            0,
+            Some(42.0),
+            Some(25.5),
+            Some(-3.3),
+            Some(3.8),
+            Some(-900.0),
+            true,
+        );
+        a.add(
+            STEP_FINE_MS,
+            Some(43.0),
+            None,
+            Some(-4.4),
+            None,
+            None,
+            false,
+        );
         let bytes = a.to_bytes();
-        assert_eq!(bytes.len(), MAGIC.len() + (ROWS_FINE + ROWS_COARSE) * ROW_BYTES);
+        assert_eq!(
+            bytes.len(),
+            MAGIC.len() + (ROWS_FINE + ROWS_COARSE) * ROW_BYTES
+        );
         let b = Archives::from_bytes(&bytes).expect("应能还原");
         let orig = a.fine.samples_since(0, 10 * STEP_FINE_MS);
         let back = b.fine.samples_since(0, 10 * STEP_FINE_MS);
@@ -542,12 +594,28 @@ mod tests {
     #[test]
     fn downsample_caps_point_count() {
         let small: Vec<Sample> = (0..10)
-            .map(|i| Sample { t: i, cap: Some(i as i64), temp: None, pow: None, volt: None, curr: None, chg: false })
+            .map(|i| Sample {
+                t: i,
+                cap: Some(i as i64),
+                temp: None,
+                pow: None,
+                volt: None,
+                curr: None,
+                chg: false,
+            })
             .collect();
         assert_eq!(downsample(small.clone()).len(), 10);
 
         let big: Vec<Sample> = (0..1000)
-            .map(|i| Sample { t: i, cap: Some(i as i64), temp: None, pow: None, volt: None, curr: None, chg: false })
+            .map(|i| Sample {
+                t: i,
+                cap: Some(i as i64),
+                temp: None,
+                pow: None,
+                volt: None,
+                curr: None,
+                chg: false,
+            })
             .collect();
         assert!(downsample(big).len() <= MAX_POINTS);
     }

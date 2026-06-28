@@ -55,7 +55,7 @@
 
         <div class="grid">
           <div class="stat-card">
-            <span class="stat-label">健康度</span>
+            <span class="stat-label">容量健康</span>
             <span class="stat-value" id="oHealth">—</span>
           </div>
           <div class="stat-card">
@@ -79,7 +79,7 @@
           <div class="health-score" id="healthScore">--<small>%</small></div>
           <div class="health-bar-wrap">
             <div class="health-bar"><div class="health-bar-fill" id="healthBar"></div></div>
-            <p class="health-note" id="healthNote">电池健康 = 当前满电容量 / 设计容量</p>
+            <p class="health-note" id="healthNote">容量健康 = 当前满电容量 / 设计容量；驱动 SOH 单独列出</p>
           </div>
         </div>
         <div class="grid">
@@ -88,7 +88,7 @@
           <div class="stat-card"><span class="stat-label">已损耗</span><span class="stat-value" id="capLost">—</span></div>
           <div class="stat-card"><span class="stat-label">充电循环</span><span class="stat-value" id="hCycles">—</span></div>
           <div class="stat-card"><span class="stat-label">健康状态</span><span class="stat-value" id="hHealthStatus">—</span></div>
-          <div class="stat-card"><span class="stat-label">SoH</span><span class="stat-value" id="hSoh">—</span></div>
+          <div class="stat-card"><span class="stat-label">驱动 SOH</span><span class="stat-value" id="hSoh">—</span></div>
           <div class="stat-card"><span class="stat-label">电池技术</span><span class="stat-value" id="hTech">—</span></div>
           <div class="stat-card"><span class="stat-label">内阻</span><span class="stat-value" id="hResistance">—</span></div>
         </div>
@@ -185,6 +185,43 @@
                 <button type="button" role="option" data-value="tray" aria-selected="false">最小化到托盘</button>
                 <button type="button" role="option" data-value="exit" aria-selected="false">退出应用</button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="section-h">电池养护提醒</h3>
+        <p class="section-sub">按电量阈值弹出系统通知，纯软件实现，任何设备都能用，不改变充电行为。</p>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name">低电量提醒</div>
+              <div class="setting-desc">放电时电量低于阈值，提醒接上电源</div>
+            </div>
+            <div class="setting-trailing">
+              <div class="threshold-input">
+                <input type="number" id="setRemindChargeAt" min="1" max="99" value="30" />
+                <span>%</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setRemindCharge" checked />
+                <span class="slider-sw"></span>
+              </label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name">高电量提醒</div>
+              <div class="setting-desc">充电时电量高于阈值，提醒拔掉电源</div>
+            </div>
+            <div class="setting-trailing">
+              <div class="threshold-input">
+                <input type="number" id="setRemindUnplugAt" min="1" max="100" value="80" />
+                <span>%</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setRemindUnplug" checked />
+                <span class="slider-sw"></span>
+              </label>
             </div>
           </div>
         </div>

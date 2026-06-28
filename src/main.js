@@ -442,7 +442,15 @@ seedBuffer().then(() => {
 });
 
 // ---------- 设置 ----------
-let settings = { autostart: false, silent_start: false, close_action: "ask" };
+let settings = {
+  autostart: false,
+  silent_start: false,
+  close_action: "ask",
+  remind_charge: true,
+  remind_charge_at: 30,
+  remind_unplug: true,
+  remind_unplug_at: 80,
+};
 const CLOSE_ACTION_LABELS = {
   ask: "每次询问",
   tray: "最小化到托盘",
@@ -471,9 +479,20 @@ async function loadSettings() {
     $("setAutostart").checked = settings.autostart;
     $("setSilentStart").checked = settings.silent_start;
     setCloseActionValue(settings.close_action);
+    $("setRemindCharge").checked = settings.remind_charge;
+    $("setRemindChargeAt").value = settings.remind_charge_at;
+    $("setRemindUnplug").checked = settings.remind_unplug;
+    $("setRemindUnplugAt").value = settings.remind_unplug_at;
+    syncReminderInputs();
   } catch (err) {
     console.error(err);
   }
+}
+
+// 阈值输入框仅在对应提醒开启时可编辑。
+function syncReminderInputs() {
+  $("setRemindChargeAt").disabled = !settings.remind_charge;
+  $("setRemindUnplugAt").disabled = !settings.remind_unplug;
 }
 
 async function persistSettings() {
@@ -492,6 +511,34 @@ $("setSilentStart").addEventListener("change", (e) => {
   settings.silent_start = e.target.checked;
   persistSettings();
 });
+
+// 阈值输入框失焦时夹取到合法范围并保存。
+function commitThreshold(inputId, key, lo, hi) {
+  const el = $(inputId);
+  let v = parseInt(el.value, 10);
+  if (isNaN(v)) v = settings[key];
+  v = Math.min(hi, Math.max(lo, v));
+  el.value = v;
+  settings[key] = v;
+  persistSettings();
+}
+
+$("setRemindCharge").addEventListener("change", (e) => {
+  settings.remind_charge = e.target.checked;
+  syncReminderInputs();
+  persistSettings();
+});
+$("setRemindUnplug").addEventListener("change", (e) => {
+  settings.remind_unplug = e.target.checked;
+  syncReminderInputs();
+  persistSettings();
+});
+$("setRemindChargeAt").addEventListener("change", () =>
+  commitThreshold("setRemindChargeAt", "remind_charge_at", 1, 99)
+);
+$("setRemindUnplugAt").addEventListener("change", () =>
+  commitThreshold("setRemindUnplugAt", "remind_unplug_at", 1, 100)
+);
 $("setCloseActionButton").addEventListener("click", () => {
   setCloseActionDropdownOpen(!$("closeActionDropdown").classList.contains("open"));
 });

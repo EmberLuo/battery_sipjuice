@@ -25,9 +25,7 @@ fn now_ms() -> u64 {
 #[tauri::command]
 pub fn get_snapshot() -> Snapshot {
     let bat = battery::collect();
-    let cc = bat
-        .as_ref()
-        .map(|b| charge_control::status(&b.device));
+    let cc = bat.as_ref().map(|b| charge_control::status(&b.device));
     Snapshot {
         battery: bat,
         sources: power::collect(),

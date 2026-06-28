@@ -41,10 +41,10 @@ fn writable(dev: &str, attr: &str) -> bool {
 
 #[derive(Serialize, Default, Clone)]
 pub struct ChargeControl {
-    pub supported: bool,        // 两个 sysfs 文件是否存在
-    pub end_threshold: i64,     // 当前封顶值 (%)，0 通常表示未设限
-    pub start_threshold: i64,   // 当前恢复充电值 (%)
-    pub writable: bool,         // 当前进程是否有写权限
+    pub supported: bool,      // 两个 sysfs 文件是否存在
+    pub end_threshold: i64,   // 当前封顶值 (%)，0 通常表示未设限
+    pub start_threshold: i64, // 当前恢复充电值 (%)
+    pub writable: bool,       // 当前进程是否有写权限
     pub experimental_note: String,
 }
 
@@ -99,7 +99,9 @@ pub fn apply(dev: &str, start: i64, end: i64) -> Result<String, String> {
     // 先写 start 再写 end（部分驱动要求 start ≤ end 始终成立）。
     write_one(dev, START_ATTR, start)?;
     write_one(dev, END_ATTR, end)?;
-    Ok(format!("已写入：恢复 {start}% / 封顶 {end}%（请观察实际充电是否在封顶处停止以确认是否生效）"))
+    Ok(format!(
+        "已写入：恢复 {start}% / 封顶 {end}%（请观察实际充电是否在封顶处停止以确认是否生效）"
+    ))
 }
 
 fn write_one(dev: &str, attr: &str, val: i64) -> Result<(), String> {

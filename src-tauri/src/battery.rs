@@ -108,7 +108,8 @@ pub fn collect_device(dev: &str) -> Option<BatteryInfo> {
     }
 
     let full_capacity = read_full_capacity(dev);
-    let design_capacity = read_design_capacity(dev, full_capacity.as_ref().map(|v| v.source_kind.as_str()));
+    let design_capacity =
+        read_design_capacity(dev, full_capacity.as_ref().map(|v| v.source_kind.as_str()));
     let health_percent = health_percent(dev, full_capacity.as_ref(), design_capacity.as_ref());
 
     let voltage_now = micro_to_unit(read_i64(dev, "voltage_now"));
@@ -194,14 +195,12 @@ fn health_percent(
     full: Option<&CapacityValue>,
     design: Option<&CapacityValue>,
 ) -> Option<f64> {
-    if let Some(hw) = read_i64(dev, "state_of_health") {
-        if (1..=100).contains(&hw) {
-            return Some(hw as f64);
-        }
-    }
     let (full, design) = (full?, design?);
     if full.unit == design.unit && design.value > 0.0 {
         Some(full.value / design.value * 100.0)
+    } else if let Some(hw) = read_i64(dev, "state_of_health") {
+        // 仅在缺少可比容量数据时兜底使用厂商/驱动 SOH。
+        (1..=100).contains(&hw).then_some(hw as f64)
     } else {
         None
     }

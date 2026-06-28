@@ -5,6 +5,7 @@ mod charge_control;
 mod commands;
 mod history;
 mod power;
+mod reminder;
 mod settings;
 
 use std::time::Duration;
@@ -107,10 +108,16 @@ pub fn run() {
             // 后台同步线程定时采样(读 sysfs + 写文件均为同步操作，用 std 线程即可)。
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                handle.state::<history::HistoryStore>().tick();
+                let mut fired = reminder::Fired::default();
+                let mut snapshot = |h: &tauri::AppHandle| {
+                    h.state::<history::HistoryStore>().tick();
+                    let settings = h.state::<settings::SettingsStore>().get();
+                    reminder::evaluate(h, &settings, &mut fired);
+                };
+                snapshot(&handle);
                 loop {
                     std::thread::sleep(SAMPLE_INTERVAL);
-                    handle.state::<history::HistoryStore>().tick();
+                    snapshot(&handle);
                 }
             });
             Ok(())

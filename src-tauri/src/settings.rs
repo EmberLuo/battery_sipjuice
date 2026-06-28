@@ -28,6 +28,15 @@ pub struct Settings {
     pub silent_start: bool,
     /// 关闭按钮行为。
     pub close_action: CloseAction,
+
+    /// 低电量提醒：放电中电量 ≤ remind_charge_at 时提醒接电源。
+    pub remind_charge: bool,
+    /// 低电量提醒阈值 (%)。
+    pub remind_charge_at: i64,
+    /// 高电量提醒：充电中电量 ≥ remind_unplug_at 时提醒拔电源。
+    pub remind_unplug: bool,
+    /// 高电量提醒阈值 (%)。
+    pub remind_unplug_at: i64,
 }
 
 impl Default for Settings {
@@ -36,6 +45,10 @@ impl Default for Settings {
             autostart: false,
             silent_start: false,
             close_action: CloseAction::Ask,
+            remind_charge: true,
+            remind_charge_at: 30,
+            remind_unplug: true,
+            remind_unplug_at: 80,
         }
     }
 }
