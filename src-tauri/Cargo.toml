@@ -1,6 +1,6 @@
 [package]
 name = "battery-sipjuice"
-version = "0.2.0"
+version = "0.3.0"
 description = "Battery SipJuice — Linux 电池监控与健康管理"
 authors = ["battery_sipjuice"]
 license = "MIT"

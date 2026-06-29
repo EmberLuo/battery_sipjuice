@@ -22,6 +22,10 @@ pub enum CloseAction {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct Settings {
+    /// 界面语言。
+    pub language: String,
+    /// 外观主题：system / light / dark。
+    pub theme: String,
     /// 开机自启动。
     pub autostart: bool,
     /// 静默启动 —— 启动时不显示窗口，只显示托盘。
@@ -42,6 +46,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            language: "zh-CN".to_string(),
+            theme: "system".to_string(),
             autostart: false,
             silent_start: false,
             close_action: CloseAction::Ask,

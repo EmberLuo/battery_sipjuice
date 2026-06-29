@@ -10,7 +10,7 @@ mod settings;
 
 use std::time::Duration;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WindowEvent,
 };
@@ -42,24 +42,37 @@ pub fn run() {
             let current = settings_store.get();
             app.manage(settings_store);
 
-            // 系统托盘 + 右键菜单（显示窗口 / 退出）。
+            // 系统托盘 + 右键菜单（显示窗口 / 轻量模式 / 退出）。
             let show_item = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
+            let light_item = CheckMenuItemBuilder::with_id("lightweight", "轻量模式")
+                .checked(false)
+                .build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
             let menu = MenuBuilder::new(app)
                 .item(&show_item)
+                .item(&light_item)
                 .separator()
                 .item(&quit_item)
                 .build()?;
+            let light_item_for_menu = light_item.clone();
+            let light_item_for_tray = light_item.clone();
             let mut tray = TrayIconBuilder::with_id("main-tray")
                 .tooltip("Battery SipJuice")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_main(app),
+                .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "show" => {
+                        let _ = light_item_for_menu.set_checked(false);
+                        show_main(app);
+                    }
+                    "lightweight" => {
+                        let enabled = light_item_for_menu.is_checked().unwrap_or(false);
+                        apply_lightweight_mode(app, enabled);
+                    }
                     "quit" => app.exit(0),
                     _ => {}
                 })
-                .on_tray_icon_event(|tray, event| {
+                .on_tray_icon_event(move |tray, event| {
                     // 左键点击托盘图标显示窗口（部分 Linux 托盘不发此事件，菜单为兜底）。
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
@@ -67,6 +80,7 @@ pub fn run() {
                         ..
                     } = event
                     {
+                        let _ = light_item_for_tray.set_checked(false);
                         show_main(tray.app_handle());
                     }
                 });
@@ -140,5 +154,17 @@ fn show_main<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.set_focus();
+    }
+}
+
+/// 轻量模式：只留托盘运行；取消后恢复并聚焦主窗口。
+fn apply_lightweight_mode<R: tauri::Runtime>(app: &tauri::AppHandle<R>, enabled: bool) {
+    if let Some(w) = app.get_webview_window("main") {
+        if enabled {
+            let _ = w.hide();
+        } else {
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
     }
 }
