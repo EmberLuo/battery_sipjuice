@@ -79,7 +79,7 @@
           <div class="health-score" id="healthScore">--<small>%</small></div>
           <div class="health-bar-wrap">
             <div class="health-bar"><div class="health-bar-fill" id="healthBar"></div></div>
-            <p class="health-note" id="healthNote">容量健康 = 当前满电容量 / 设计容量；驱动 SOH 单独列出</p>
+            <p class="health-note" id="healthNote">容量健康 = 当前满电容量 / 设计容量</p>
           </div>
         </div>
         <div class="grid">
@@ -147,6 +147,46 @@
 
       <!-- 设置 -->
       <section class="panel" id="settings">
+        <h3 class="section-h" data-i18n="section.interface">界面</h3>
+        <div class="settings-card">
+          <div class="setting-row setting-row-stack">
+            <div class="setting-text">
+              <div class="setting-name" data-i18n="settings.language.name">界面语言</div>
+              <div class="setting-desc" data-i18n="settings.language.desc">切换应用内显示文字</div>
+            </div>
+            <div class="segmented-tiles" id="setLanguage" role="radiogroup" aria-label="界面语言">
+              <button type="button" class="segment-tile active" data-setting-value="zh-CN" role="radio" aria-checked="true">
+                <span class="segment-title">简体中文</span>
+                <span class="segment-sub">Chinese</span>
+              </button>
+              <button type="button" class="segment-tile" data-setting-value="en-US" role="radio" aria-checked="false">
+                <span class="segment-title">English</span>
+                <span class="segment-sub">US</span>
+              </button>
+            </div>
+          </div>
+          <div class="setting-row setting-row-stack">
+            <div class="setting-text">
+              <div class="setting-name" data-i18n="settings.theme.name">外观主题</div>
+              <div class="setting-desc" data-i18n="settings.theme.desc">选择浅色、深色或跟随系统</div>
+            </div>
+            <div class="segmented-tiles three" id="setTheme" role="radiogroup" aria-label="外观主题">
+              <button type="button" class="segment-tile active" data-setting-value="system" role="radio" aria-checked="true">
+                <span class="segment-title" data-i18n="theme.system">跟随系统</span>
+                <span class="segment-sub" data-i18n="theme.system.sub">自动</span>
+              </button>
+              <button type="button" class="segment-tile" data-setting-value="light" role="radio" aria-checked="false">
+                <span class="segment-title" data-i18n="theme.light">浅色</span>
+                <span class="segment-sub" data-i18n="theme.light.sub">明亮</span>
+              </button>
+              <button type="button" class="segment-tile" data-setting-value="dark" role="radio" aria-checked="false">
+                <span class="segment-title" data-i18n="theme.dark">深色</span>
+                <span class="segment-sub" data-i18n="theme.dark.sub">低亮度</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <h3 class="section-h">常规</h3>
         <div class="settings-card">
           <div class="setting-row">
@@ -250,7 +290,7 @@
         <h3 class="section-h">关于</h3>
         <div class="about-card">
           <div class="meta-row"><span>应用</span><b>Battery SipJuice</b></div>
-          <div class="meta-row"><span>版本</span><b id="aboutVersion">0.2.0</b></div>
+          <div class="meta-row"><span>版本</span><b id="aboutVersion">0.3.0</b></div>
           <div class="meta-row"><span>数据来源</span><b>本机 sysfs · 无网络上报</b></div>
         </div>
       </section>

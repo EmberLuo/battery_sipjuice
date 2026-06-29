@@ -4,6 +4,239 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
 const RING_CIRCUM = 2 * Math.PI * 52; // 与 styles.css 的 r=52 一致
+let currentLanguage = "zh-CN";
+let lastSnapshot = null;
+
+const I18N = {
+  "zh-CN": {
+    "section.interface": "界面",
+    "section.general": "常规",
+    "section.reminders": "电池养护提醒",
+    "section.powerSource": "输入电源",
+    "section.chargeControl": "充电控制",
+    "section.about": "关于",
+    "tab.overview": "概览",
+    "tab.monitor": "监测",
+    "tab.health": "健康",
+    "tab.settings": "设置",
+    "settings.language.name": "界面语言",
+    "settings.language.desc": "切换应用内显示文字",
+    "settings.theme.name": "外观主题",
+    "settings.theme.desc": "选择浅色、深色或跟随系统",
+    "theme.system": "跟随系统",
+    "theme.system.sub": "自动",
+    "theme.light": "浅色",
+    "theme.light.sub": "明亮",
+    "theme.dark": "深色",
+    "theme.dark.sub": "低亮度",
+    "settings.autostart.name": "开机自启动",
+    "settings.autostart.desc": "登录系统后自动启动 Battery SipJuice",
+    "settings.silent.name": "静默启动",
+    "settings.silent.desc": "启动时不显示窗口，仅在系统托盘运行",
+    "settings.close.name": "关闭按钮行为",
+    "settings.close.desc": "点击窗口关闭按钮(✕)时的动作",
+    "settings.reminders.desc": "按电量阈值弹出系统通知，纯软件实现，任何设备都能用，不改变充电行为。",
+    "settings.low.name": "低电量提醒",
+    "settings.low.desc": "放电时电量低于阈值，提醒接上电源",
+    "settings.high.name": "高电量提醒",
+    "settings.high.desc": "充电时电量高于阈值，提醒拔掉电源",
+    "close.ask": "每次询问",
+    "close.tray": "最小化到托盘",
+    "close.exit": "退出应用",
+    "stat.status": "状态",
+    "stat.timeRemaining": "剩余时间",
+    "stat.power": "功率",
+    "stat.temperature": "温度",
+    "stat.health": "容量健康",
+    "stat.cycles": "循环次数",
+    "stat.fullCapacity": "实际满电容量",
+    "stat.designCapacity": "设计容量",
+    "stat.capacityLost": "已损耗",
+    "stat.chargeCycles": "充电循环",
+    "stat.healthStatus": "健康状态",
+    "stat.driverSoh": "驱动 SOH",
+    "stat.technology": "电池技术",
+    "stat.resistance": "内阻",
+    "stat.voltageNow": "瞬时电压",
+    "stat.ocv": "开路电压(OCV)",
+    "stat.vmax": "最大电压",
+    "stat.currentNow": "瞬时电流",
+    "stat.current": "当前",
+    "stat.min": "区间最小",
+    "stat.max": "区间最大",
+    "stat.avg": "区间平均",
+    "health.note": "容量健康 = 当前满电容量 / 设计容量",
+    "metric.cap": "电量",
+    "metric.pow": "功率",
+    "metric.temp": "温度",
+    "metric.volt": "电压",
+    "metric.curr": "电流",
+    "range.5m": "5 分",
+    "range.30m": "30 分",
+    "range.6h": "6 时",
+    "range.24h": "24 时",
+    "range.7d": "7 天",
+    "chart.empty": "正在采集数据…曲线会随时间逐渐填充。",
+    "chart.chargingPeriod": "充电时段",
+    "source.empty": "未检测到外接电源",
+    "source.empty.battery": "未检测到外接电源（当前使用电池供电）",
+    "source.online": "在线",
+    "source.usb": "USB 充电",
+    "source.usbc": "USB-C 充电",
+    "source.usbpd": "USB PD 充电",
+    "source.mains": "交流电源",
+    "source.wireless": "无线充电",
+    "source.fallback": "外接电源",
+    "status.charging": "充电中",
+    "status.discharging": "放电中",
+    "status.full": "已充满",
+    "status.notCharging": "未充电",
+    "status.unknown": "未知",
+    "status.noBattery": "无电池",
+    "status.reading": "读取中…",
+    "status.readFailed": "读取失败",
+    "time.hour": "时",
+    "time.minute": "分",
+    "time.toFull": "充满约 {time}",
+    "footer.updated": "更新于 {time}",
+    "footer.privacy": "本机直读 sysfs · 无网络上报",
+    "charge.experimental": "实验性功能",
+    "charge.checking": "正在检测充电阈值接口…",
+    "charge.start": "恢复充电阈值",
+    "charge.end": "充电封顶阈值",
+    "charge.apply": "应用阈值",
+    "charge.writing": "正在写入…",
+    "charge.noWrite": "{note}（当前无写入权限，应用时需提权）",
+    "about.app": "应用",
+    "about.version": "版本",
+    "about.source": "数据来源",
+    "about.sourceValue": "本机 sysfs · 无网络上报",
+    "modal.title": "关闭 Battery SipJuice",
+    "modal.body": "你希望退出应用，还是最小化到系统托盘继续后台监控？",
+    "modal.remember": "记住我的选择，不再询问",
+    "modal.cancel": "取消",
+    "modal.tray": "最小化到托盘",
+    "modal.quit": "退出",
+  },
+  "en-US": {
+    "section.interface": "Interface",
+    "section.general": "General",
+    "section.reminders": "Battery Care Reminders",
+    "section.powerSource": "Power Sources",
+    "section.chargeControl": "Charge Control",
+    "section.about": "About",
+    "tab.overview": "Overview",
+    "tab.monitor": "Monitor",
+    "tab.health": "Health",
+    "tab.settings": "Settings",
+    "settings.language.name": "Interface Language",
+    "settings.language.desc": "Change the text used in the app",
+    "settings.theme.name": "Appearance Theme",
+    "settings.theme.desc": "Choose light, dark, or follow the system",
+    "theme.system": "System",
+    "theme.system.sub": "Auto",
+    "theme.light": "Light",
+    "theme.light.sub": "Bright",
+    "theme.dark": "Dark",
+    "theme.dark.sub": "Low light",
+    "settings.autostart.name": "Launch at Login",
+    "settings.autostart.desc": "Start Battery SipJuice when you sign in",
+    "settings.silent.name": "Silent Start",
+    "settings.silent.desc": "Start hidden and keep running in the tray",
+    "settings.close.name": "Close Button",
+    "settings.close.desc": "What happens when you click the window close button",
+    "settings.reminders.desc": "Show system notifications at battery thresholds. Software only, works on any device, and does not change charging behavior.",
+    "settings.low.name": "Low Battery Reminder",
+    "settings.low.desc": "Notify when discharging below the threshold",
+    "settings.high.name": "High Battery Reminder",
+    "settings.high.desc": "Notify when charging above the threshold",
+    "close.ask": "Ask Every Time",
+    "close.tray": "Minimize to Tray",
+    "close.exit": "Quit App",
+    "stat.status": "Status",
+    "stat.timeRemaining": "Time Remaining",
+    "stat.power": "Power",
+    "stat.temperature": "Temperature",
+    "stat.health": "Capacity Health",
+    "stat.cycles": "Cycle Count",
+    "stat.fullCapacity": "Full Capacity",
+    "stat.designCapacity": "Design Capacity",
+    "stat.capacityLost": "Capacity Lost",
+    "stat.chargeCycles": "Charge Cycles",
+    "stat.healthStatus": "Health Status",
+    "stat.driverSoh": "Driver SOH",
+    "stat.technology": "Technology",
+    "stat.resistance": "Resistance",
+    "stat.voltageNow": "Instant Voltage",
+    "stat.ocv": "Open-Circuit Voltage",
+    "stat.vmax": "Max Voltage",
+    "stat.currentNow": "Instant Current",
+    "stat.current": "Current",
+    "stat.min": "Range Min",
+    "stat.max": "Range Max",
+    "stat.avg": "Range Avg",
+    "health.note": "Capacity health = current full capacity / design capacity",
+    "metric.cap": "Battery",
+    "metric.pow": "Power",
+    "metric.temp": "Temperature",
+    "metric.volt": "Voltage",
+    "metric.curr": "Current",
+    "range.5m": "5 min",
+    "range.30m": "30 min",
+    "range.6h": "6 h",
+    "range.24h": "24 h",
+    "range.7d": "7 days",
+    "chart.empty": "Collecting data… the chart will fill in over time.",
+    "chart.chargingPeriod": "Charging period",
+    "source.empty": "No external power detected",
+    "source.empty.battery": "No external power detected (currently on battery)",
+    "source.online": "Online",
+    "source.usb": "USB charging",
+    "source.usbc": "USB-C charging",
+    "source.usbpd": "USB PD charging",
+    "source.mains": "AC power",
+    "source.wireless": "Wireless charging",
+    "source.fallback": "External power",
+    "status.charging": "Charging",
+    "status.discharging": "Discharging",
+    "status.full": "Full",
+    "status.notCharging": "Not charging",
+    "status.unknown": "Unknown",
+    "status.noBattery": "No battery",
+    "status.reading": "Reading…",
+    "status.readFailed": "Read failed",
+    "time.hour": "h",
+    "time.minute": "min",
+    "time.toFull": "Full in about {time}",
+    "footer.updated": "Updated at {time}",
+    "footer.privacy": "Local sysfs only · no network reporting",
+    "charge.experimental": "Experimental",
+    "charge.checking": "Checking charge threshold interface…",
+    "charge.start": "Resume charging at",
+    "charge.end": "Stop charging at",
+    "charge.apply": "Apply Thresholds",
+    "charge.writing": "Writing…",
+    "charge.noWrite": "{note} (write access unavailable; applying may require elevation)",
+    "about.app": "App",
+    "about.version": "Version",
+    "about.source": "Data Source",
+    "about.sourceValue": "Local sysfs · no network reporting",
+    "modal.title": "Close Battery SipJuice",
+    "modal.body": "Do you want to quit the app, or minimize it to the tray and keep monitoring?",
+    "modal.remember": "Remember my choice and do not ask again",
+    "modal.cancel": "Cancel",
+    "modal.tray": "Minimize to Tray",
+    "modal.quit": "Quit",
+  },
+};
+
+const t = (key, params = {}) => {
+  let text = I18N[currentLanguage]?.[key] ?? I18N["zh-CN"][key] ?? key;
+  Object.entries(params).forEach(([name, value]) => {
+    text = text.replace(`{${name}}`, value);
+  });
+  return text;
+};
 
 // ---------- 标签切换 ----------
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -20,15 +253,133 @@ const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 0) => (n == null || isNaN(n) ? "—" : Number(n).toFixed(d));
 const valueWithUnit = (v, d = 0) => (v ? `${fmt(v.value, d)} ${v.unit}` : "—");
 
+const STATIC_TEXT = [
+  [".tabs [data-tab='overview']", "tab.overview"],
+  [".tabs [data-tab='monitor']", "tab.monitor"],
+  [".tabs [data-tab='health']", "tab.health"],
+  [".tabs [data-tab='settings']", "tab.settings"],
+  ["#overview .hero-meta .meta-row:nth-child(1) span", "stat.status"],
+  ["#overview .hero-meta .meta-row:nth-child(2) span", "stat.timeRemaining"],
+  ["#overview .hero-meta .meta-row:nth-child(3) span", "stat.power"],
+  ["#overview .hero-meta .meta-row:nth-child(4) span", "stat.temperature"],
+  ["#overview .grid .stat-card:nth-child(1) .stat-label", "stat.health"],
+  ["#overview .grid .stat-card:nth-child(2) .stat-label", "stat.cycles"],
+  ["#overview .grid .stat-card:nth-child(3) .stat-label", "stat.fullCapacity"],
+  ["#overview .grid .stat-card:nth-child(4) .stat-label", "stat.designCapacity"],
+  ["#health .grid .stat-card:nth-child(1) .stat-label", "stat.fullCapacity"],
+  ["#health .grid .stat-card:nth-child(2) .stat-label", "stat.designCapacity"],
+  ["#health .grid .stat-card:nth-child(3) .stat-label", "stat.capacityLost"],
+  ["#health .grid .stat-card:nth-child(4) .stat-label", "stat.chargeCycles"],
+  ["#health .grid .stat-card:nth-child(5) .stat-label", "stat.healthStatus"],
+  ["#health .grid .stat-card:nth-child(6) .stat-label", "stat.driverSoh"],
+  ["#health .grid .stat-card:nth-child(7) .stat-label", "stat.technology"],
+  ["#health .grid .stat-card:nth-child(8) .stat-label", "stat.resistance"],
+  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(1) .stat-label", "stat.voltageNow"],
+  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(2) .stat-label", "stat.ocv"],
+  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(3) .stat-label", "stat.vmax"],
+  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(4) .stat-label", "stat.currentNow"],
+  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(5) .stat-label", "stat.power"],
+  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(6) .stat-label", "stat.temperature"],
+  ["#monitor > .grid:nth-of-type(3) .stat-card:nth-child(1) .stat-label", "stat.current"],
+  ["#monitor > .grid:nth-of-type(3) .stat-card:nth-child(2) .stat-label", "stat.min"],
+  ["#monitor > .grid:nth-of-type(3) .stat-card:nth-child(3) .stat-label", "stat.max"],
+  ["#monitor > .grid:nth-of-type(3) .stat-card:nth-child(4) .stat-label", "stat.avg"],
+  ["#healthNote", "health.note"],
+  ["#chartEmpty", "chart.empty"],
+  ["#sourceList .empty-hint", "source.empty"],
+  ["#monitor > .section-h", "section.powerSource"],
+  ["#settings > .section-h:nth-of-type(2)", "section.general"],
+  ["#settings > .section-h:nth-of-type(3)", "section.reminders"],
+  ["#settings > .section-h:nth-of-type(4)", "section.chargeControl"],
+  ["#settings > .section-h:nth-of-type(5)", "section.about"],
+  ["#settings > .section-sub", "settings.reminders.desc"],
+  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(1) .setting-name", "settings.autostart.name"],
+  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(1) .setting-desc", "settings.autostart.desc"],
+  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(2) .setting-name", "settings.silent.name"],
+  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(2) .setting-desc", "settings.silent.desc"],
+  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(3) .setting-name", "settings.close.name"],
+  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(3) .setting-desc", "settings.close.desc"],
+  ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(1) .setting-name", "settings.low.name"],
+  ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(1) .setting-desc", "settings.low.desc"],
+  ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(2) .setting-name", "settings.high.name"],
+  ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(2) .setting-desc", "settings.high.desc"],
+  ["#ccBanner b", "charge.experimental"],
+  ["#ccNote", "charge.checking"],
+  ["#applyBtn", "charge.apply"],
+  [".about-card .meta-row:nth-child(1) span", "about.app"],
+  [".about-card .meta-row:nth-child(2) span", "about.version"],
+  [".about-card .meta-row:nth-child(3) span", "about.source"],
+  [".about-card .meta-row:nth-child(3) b", "about.sourceValue"],
+  [".footer .dev-tag", "footer.privacy"],
+  [".modal-title", "modal.title"],
+  [".modal-body", "modal.body"],
+  [".modal-remember span", "modal.remember"],
+  ["#closeCancel", "modal.cancel"],
+  ["#closeTray", "modal.tray"],
+  ["#closeQuit", "modal.quit"],
+];
+
+function applyTheme(theme) {
+  const next = ["system", "light", "dark"].includes(theme) ? theme : "system";
+  if (next === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.dataset.theme = next;
+}
+
+function setSegmentedValue(groupId, value) {
+  const group = $(groupId);
+  group.querySelectorAll("[data-setting-value]").forEach((btn) => {
+    const active = btn.dataset.settingValue === value;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-checked", String(active));
+  });
+}
+
+function applyLanguage(language) {
+  currentLanguage = I18N[language] ? language : "zh-CN";
+  document.documentElement.lang = currentLanguage;
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  STATIC_TEXT.forEach(([selector, key]) => {
+    const el = document.querySelector(selector);
+    if (el) el.textContent = t(key);
+  });
+  document.querySelectorAll("#metricChips [data-metric]").forEach((btn) => {
+    const metric = METRICS[btn.dataset.metric];
+    btn.textContent = `${t(metric.nameKey)} ${metric.unit}`;
+  });
+  const legend = document.querySelector(".chart-legend");
+  const band = legend?.querySelector(".lg-band");
+  if (band?.nextSibling) band.nextSibling.nodeValue = ` ${t("chart.chargingPeriod")} `;
+  const startLabel = document.querySelector(".threshold-row:nth-child(1) label");
+  if (startLabel?.firstChild) startLabel.firstChild.nodeValue = `${t("charge.start")} `;
+  const endLabel = document.querySelector(".threshold-row:nth-child(2) label");
+  if (endLabel?.firstChild) endLabel.firstChild.nodeValue = `${t("charge.end")} `;
+  document.querySelector("#rangeChips [data-range='300000']").textContent = t("range.5m");
+  document.querySelector("#rangeChips [data-range='1800000']").textContent = t("range.30m");
+  document.querySelector("#rangeChips [data-range='21600000']").textContent = t("range.6h");
+  document.querySelector("#rangeChips [data-range='86400000']").textContent = t("range.24h");
+  document.querySelector("#rangeChips [data-range='604800000']").textContent = t("range.7d");
+  setCloseActionValue(settings.close_action);
+  if (lastSnapshot) {
+    renderBattery(lastSnapshot.battery);
+    renderSources(lastSnapshot.sources);
+    renderChargeControl(lastSnapshot.charge_control);
+    const d = new Date(lastSnapshot.timestamp_ms);
+    $("lastUpdate").textContent = t("footer.updated", { time: d.toLocaleTimeString(currentLanguage) });
+  }
+  if (isMonitorActive()) refreshChart();
+}
+
 function sourceLabel(kind) {
   return (
     {
-      USB: "USB 充电",
-      USB_C: "USB-C 充电",
-      USB_PD: "USB PD 充电",
-      Mains: "交流电源",
-      Wireless: "无线充电",
-    }[kind] || kind || "外接电源"
+      USB: t("source.usb"),
+      USB_C: t("source.usbc"),
+      USB_PD: t("source.usbpd"),
+      Mains: t("source.mains"),
+      Wireless: t("source.wireless"),
+    }[kind] || kind || t("source.fallback")
   );
 }
 
@@ -36,17 +387,17 @@ function fmtTime(min) {
   if (!min || min <= 0) return "—";
   const h = Math.floor(min / 60);
   const m = min % 60;
-  return h > 0 ? `${h} 时 ${m} 分` : `${m} 分`;
+  return h > 0 ? `${h} ${t("time.hour")} ${m} ${t("time.minute")}` : `${m} ${t("time.minute")}`;
 }
 
 function statusLabel(s) {
   return (
     {
-      Charging: "充电中",
-      Discharging: "放电中",
-      Full: "已充满",
-      "Not charging": "未充电",
-      Unknown: "未知",
+      Charging: t("status.charging"),
+      Discharging: t("status.discharging"),
+      Full: t("status.full"),
+      "Not charging": t("status.notCharging"),
+      Unknown: t("status.unknown"),
     }[s] || s || "—"
   );
 }
@@ -54,7 +405,7 @@ function statusLabel(s) {
 // ---------- 渲染 ----------
 function renderBattery(b) {
   if (!b) {
-    $("statusText").textContent = "无电池";
+    $("statusText").textContent = t("status.noBattery");
     return;
   }
 
@@ -77,7 +428,9 @@ function renderBattery(b) {
   // hero 元信息
   $("hStatus").textContent = statusLabel(b.status);
   $("hTime").textContent =
-    b.status === "Charging" ? `充满约 ${fmtTime(b.time_to_full_min)}` : fmtTime(b.time_to_empty_min);
+    b.status === "Charging"
+      ? t("time.toFull", { time: fmtTime(b.time_to_full_min) })
+      : fmtTime(b.time_to_empty_min);
   $("hPower").textContent = b.power_now == null ? "—" : `${fmt(Math.abs(b.power_now), 2)} W`;
   $("hTemp").textContent = b.temperature == null ? "—" : `${fmt(b.temperature, 1)} °C`;
 
@@ -115,7 +468,7 @@ function renderSources(sources) {
   const list = $("sourceList");
   const online = sources.filter((s) => s.online === true);
   if (online.length === 0) {
-    list.innerHTML = '<p class="empty-hint">未检测到外接电源（当前使用电池供电）</p>';
+    list.innerHTML = `<p class="empty-hint">${t("source.empty.battery")}</p>`;
     return;
   }
   list.innerHTML = online
@@ -130,7 +483,7 @@ function renderSources(sources) {
           <div class="src-name">${sourceLabel(s.kind)}</div>
           <div class="src-detail">${detail}</div>
         </div>
-        <div class="src-state on">在线</div>
+        <div class="src-state on">${t("source.online")}</div>
       </div>`;
     })
     .join("");
@@ -162,7 +515,7 @@ function renderChargeControl(cc) {
   }
   btn.disabled = false;
   if (!cc.writable) {
-    $("ccNote").textContent = cc.experimental_note + "（当前无写入权限，应用时需提权）";
+    $("ccNote").textContent = t("charge.noWrite", { note: cc.experimental_note });
   }
 }
 
@@ -179,7 +532,7 @@ $("applyBtn").addEventListener("click", async () => {
   const end = parseInt($("endSlider").value, 10);
   const result = $("applyResult");
   result.className = "apply-result";
-  result.textContent = "正在写入…";
+  result.textContent = t("charge.writing");
   try {
     const msg = await invoke("set_charge_threshold", { start, end });
     result.className = "apply-result ok";
@@ -192,11 +545,11 @@ $("applyBtn").addEventListener("click", async () => {
 
 // ---------- 监测曲线（实时滚动 + 多档分时）----------
 const METRICS = {
-  cap:  { name: "电量", unit: "%",  decimals: 0, signed: false, clamp: [0, 100] },
-  pow:  { name: "功率", unit: "W",  decimals: 2, signed: true },
-  temp: { name: "温度", unit: "°C", decimals: 1, signed: false },
-  volt: { name: "电压", unit: "V",  decimals: 3, signed: false },
-  curr: { name: "电流", unit: "mA", decimals: 0, signed: true },
+  cap:  { nameKey: "metric.cap", unit: "%",  decimals: 0, signed: false, clamp: [0, 100] },
+  pow:  { nameKey: "metric.pow", unit: "W",  decimals: 2, signed: true },
+  temp: { nameKey: "metric.temp", unit: "°C", decimals: 1, signed: false },
+  volt: { nameKey: "metric.volt", unit: "V",  decimals: 3, signed: false },
+  curr: { nameKey: "metric.curr", unit: "mA", decimals: 0, signed: true },
 };
 
 const MONITOR = { metric: "cap", rangeMs: 300000 };
@@ -272,7 +625,7 @@ async function refreshChart() {
 
 function renderChart(samples) {
   const m = METRICS[MONITOR.metric];
-  $("chartMetricName").textContent = m.name;
+  $("chartMetricName").textContent = t(m.nameKey);
   const vals = samples.map((s) => s[MONITOR.metric]).filter((v) => v != null);
 
   if (samples.length < 2 || vals.length === 0) {
@@ -419,6 +772,7 @@ window.addEventListener("resize", () => {
 async function tick() {
   try {
     const snap = await invoke("get_snapshot");
+    lastSnapshot = snap;
     renderBattery(snap.battery);
     renderSources(snap.sources);
     renderChargeControl(snap.charge_control);
@@ -426,9 +780,9 @@ async function tick() {
     // 监测页可见时跟随主轮询实时刷新曲线（短档平滑滚动，长档查后端历史）。
     if (isMonitorActive()) refreshChart();
     const d = new Date(snap.timestamp_ms);
-    $("lastUpdate").textContent = `更新于 ${d.toLocaleTimeString("zh-CN")}`;
+    $("lastUpdate").textContent = t("footer.updated", { time: d.toLocaleTimeString(currentLanguage) });
   } catch (err) {
-    $("statusText").textContent = "读取失败";
+    $("statusText").textContent = t("status.readFailed");
     console.error(err);
   }
 }
@@ -443,6 +797,8 @@ seedBuffer().then(() => {
 
 // ---------- 设置 ----------
 let settings = {
+  language: "zh-CN",
+  theme: "system",
   autostart: false,
   silent_start: false,
   close_action: "ask",
@@ -451,11 +807,12 @@ let settings = {
   remind_unplug: true,
   remind_unplug_at: 80,
 };
-const CLOSE_ACTION_LABELS = {
-  ask: "每次询问",
-  tray: "最小化到托盘",
-  exit: "退出应用",
-};
+const closeActionLabel = (value) =>
+  ({
+    ask: t("close.ask"),
+    tray: t("close.tray"),
+    exit: t("close.exit"),
+  }[value]);
 
 function setCloseActionDropdownOpen(open) {
   $("closeActionDropdown").classList.toggle("open", open);
@@ -463,12 +820,13 @@ function setCloseActionDropdownOpen(open) {
 }
 
 function setCloseActionValue(value, shouldPersist = false) {
-  const next = CLOSE_ACTION_LABELS[value] ? value : "ask";
+  const next = closeActionLabel(value) ? value : "ask";
   settings.close_action = next;
   $("setCloseAction").value = next;
-  $("setCloseActionLabel").textContent = CLOSE_ACTION_LABELS[next];
+  $("setCloseActionLabel").textContent = closeActionLabel(next);
   document.querySelectorAll("#setCloseActionMenu [data-value]").forEach((item) => {
     item.setAttribute("aria-selected", String(item.dataset.value === next));
+    item.textContent = closeActionLabel(item.dataset.value);
   });
   if (shouldPersist) persistSettings();
 }
@@ -476,6 +834,12 @@ function setCloseActionValue(value, shouldPersist = false) {
 async function loadSettings() {
   try {
     settings = await invoke("get_settings");
+    settings.language = I18N[settings.language] ? settings.language : "zh-CN";
+    settings.theme = ["system", "light", "dark"].includes(settings.theme) ? settings.theme : "system";
+    setSegmentedValue("setLanguage", settings.language);
+    setSegmentedValue("setTheme", settings.theme);
+    applyTheme(settings.theme);
+    applyLanguage(settings.language);
     $("setAutostart").checked = settings.autostart;
     $("setSilentStart").checked = settings.silent_start;
     setCloseActionValue(settings.close_action);
@@ -511,6 +875,21 @@ $("setSilentStart").addEventListener("change", (e) => {
   settings.silent_start = e.target.checked;
   persistSettings();
 });
+
+function wireSegmentedSetting(groupId, key, apply) {
+  $(groupId).addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-setting-value]");
+    if (!btn) return;
+    const value = btn.dataset.settingValue;
+    settings[key] = value;
+    setSegmentedValue(groupId, value);
+    apply(value);
+    persistSettings();
+  });
+}
+
+wireSegmentedSetting("setLanguage", "language", applyLanguage);
+wireSegmentedSetting("setTheme", "theme", applyTheme);
 
 // 阈值输入框失焦时夹取到合法范围并保存。
 function commitThreshold(inputId, key, lo, hi) {
