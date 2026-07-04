@@ -261,61 +261,6 @@ body {
 .src-state.off { background: var(--bg-sunken); color: var(--text-dim); }
 .empty-hint { color: var(--text-dim); font-size: 13.5px; padding: 16px 0; }
 
-/* 充电控制页 */
-.warn-banner {
-  display: flex; gap: 14px; align-items: flex-start;
-  background: rgba(229, 165, 10, 0.12);
-  border: 1px solid rgba(229, 165, 10, 0.3);
-  border-radius: var(--radius-sm);
-  padding: 16px 18px;
-  margin-top: var(--gap);
-}
-.warn-icon { font-size: 20px; }
-.warn-banner b { font-size: 14px; }
-.warn-banner p { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.5; }
-
-.control-card {
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 24px 28px;
-  margin-top: var(--gap);
-  box-shadow: var(--shadow);
-}
-.control-card.disabled { opacity: 0.5; pointer-events: none; }
-.threshold-row { margin-bottom: 22px; }
-.threshold-row label {
-  display: block; font-size: 14px; font-weight: 600; margin-bottom: 10px;
-}
-.threshold-row label span { color: var(--accent); font-weight: 800; }
-.threshold-row input[type="range"] {
-  width: 100%; height: 6px; border-radius: 3px;
-  background: var(--bg-sunken);
-  -webkit-appearance: none; appearance: none;
-  cursor: pointer;
-}
-.threshold-row input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none;
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--accent);
-  border: 3px solid var(--bg-elev);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-}
-.apply-btn {
-  width: 100%;
-  border: 0; border-radius: var(--radius-sm);
-  background: var(--accent); color: #fff;
-  font-family: inherit; font-size: 14px; font-weight: 700;
-  padding: 12px; cursor: pointer;
-  transition: background 0.18s, transform 0.1s;
-}
-.apply-btn:hover:not(:disabled) { background: var(--accent-strong); }
-.apply-btn:active:not(:disabled) { transform: scale(0.98); }
-.apply-btn:disabled { background: var(--bg-sunken); color: var(--text-dim); cursor: not-allowed; }
-.apply-result { font-size: 13px; margin-top: 14px; line-height: 1.5; }
-.apply-result.ok { color: var(--good); }
-.apply-result.err { color: var(--bad); }
-
 /* 历史曲线页 */
 .chart-card {
   background: var(--bg-elev);

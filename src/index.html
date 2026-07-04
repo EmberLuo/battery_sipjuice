@@ -94,7 +94,7 @@
         </div>
       </section>
 
-      <!-- 监测：实时电气读数 + 实时滚动曲线 + 充电输入 -->
+      <!-- 监测：实时电气读数 + 实时滚动曲线 -->
       <section class="panel" id="monitor">
         <div class="grid">
           <div class="stat-card"><span class="stat-label">瞬时电压</span><span class="stat-value" id="pVoltage">—</span></div>
@@ -266,31 +266,10 @@
           </div>
         </div>
 
-        <h3 class="section-h">充电控制</h3>
-        <div class="warn-banner" id="ccBanner">
-          <span class="warn-icon">⚠️</span>
-          <div>
-            <b>实验性功能</b>
-            <p id="ccNote">正在检测充电阈值接口…</p>
-          </div>
-        </div>
-        <div class="control-card" id="ccCard">
-          <div class="threshold-row">
-            <label>恢复充电阈值 <span id="startVal">75</span>%</label>
-            <input type="range" id="startSlider" min="0" max="100" value="75" />
-          </div>
-          <div class="threshold-row">
-            <label>充电封顶阈值 <span id="endVal">80</span>%</label>
-            <input type="range" id="endSlider" min="0" max="100" value="80" />
-          </div>
-          <button class="apply-btn" id="applyBtn" disabled>应用阈值</button>
-          <p class="apply-result" id="applyResult"></p>
-        </div>
-
         <h3 class="section-h">关于</h3>
         <div class="about-card">
           <div class="meta-row"><span>应用</span><b>Battery SipJuice</b></div>
-          <div class="meta-row"><span>版本</span><b id="aboutVersion">0.3.0</b></div>
+          <div class="meta-row"><span>版本</span><b id="aboutVersion">0.3.1</b></div>
           <div class="meta-row"><span>数据来源</span><b>本机 sysfs · 无网络上报</b></div>
         </div>
       </section>

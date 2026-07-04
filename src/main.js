@@ -13,7 +13,6 @@ const I18N = {
     "section.general": "常规",
     "section.reminders": "电池养护提醒",
     "section.powerSource": "输入电源",
-    "section.chargeControl": "充电控制",
     "section.about": "关于",
     "tab.overview": "概览",
     "tab.monitor": "监测",
@@ -100,13 +99,6 @@ const I18N = {
     "time.toFull": "充满约 {time}",
     "footer.updated": "更新于 {time}",
     "footer.privacy": "本机直读 sysfs · 无网络上报",
-    "charge.experimental": "实验性功能",
-    "charge.checking": "正在检测充电阈值接口…",
-    "charge.start": "恢复充电阈值",
-    "charge.end": "充电封顶阈值",
-    "charge.apply": "应用阈值",
-    "charge.writing": "正在写入…",
-    "charge.noWrite": "{note}（当前无写入权限，应用时需提权）",
     "about.app": "应用",
     "about.version": "版本",
     "about.source": "数据来源",
@@ -123,7 +115,6 @@ const I18N = {
     "section.general": "General",
     "section.reminders": "Battery Care Reminders",
     "section.powerSource": "Power Sources",
-    "section.chargeControl": "Charge Control",
     "section.about": "About",
     "tab.overview": "Overview",
     "tab.monitor": "Monitor",
@@ -210,13 +201,6 @@ const I18N = {
     "time.toFull": "Full in about {time}",
     "footer.updated": "Updated at {time}",
     "footer.privacy": "Local sysfs only · no network reporting",
-    "charge.experimental": "Experimental",
-    "charge.checking": "Checking charge threshold interface…",
-    "charge.start": "Resume charging at",
-    "charge.end": "Stop charging at",
-    "charge.apply": "Apply Thresholds",
-    "charge.writing": "Writing…",
-    "charge.noWrite": "{note} (write access unavailable; applying may require elevation)",
     "about.app": "App",
     "about.version": "Version",
     "about.source": "Data Source",
@@ -290,8 +274,7 @@ const STATIC_TEXT = [
   ["#monitor > .section-h", "section.powerSource"],
   ["#settings > .section-h:nth-of-type(2)", "section.general"],
   ["#settings > .section-h:nth-of-type(3)", "section.reminders"],
-  ["#settings > .section-h:nth-of-type(4)", "section.chargeControl"],
-  ["#settings > .section-h:nth-of-type(5)", "section.about"],
+  ["#settings > .section-h:nth-of-type(4)", "section.about"],
   ["#settings > .section-sub", "settings.reminders.desc"],
   ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(1) .setting-name", "settings.autostart.name"],
   ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(1) .setting-desc", "settings.autostart.desc"],
@@ -303,9 +286,6 @@ const STATIC_TEXT = [
   ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(1) .setting-desc", "settings.low.desc"],
   ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(2) .setting-name", "settings.high.name"],
   ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(2) .setting-desc", "settings.high.desc"],
-  ["#ccBanner b", "charge.experimental"],
-  ["#ccNote", "charge.checking"],
-  ["#applyBtn", "charge.apply"],
   [".about-card .meta-row:nth-child(1) span", "about.app"],
   [".about-card .meta-row:nth-child(2) span", "about.version"],
   [".about-card .meta-row:nth-child(3) span", "about.source"],
@@ -351,10 +331,6 @@ function applyLanguage(language) {
   const legend = document.querySelector(".chart-legend");
   const band = legend?.querySelector(".lg-band");
   if (band?.nextSibling) band.nextSibling.nodeValue = ` ${t("chart.chargingPeriod")} `;
-  const startLabel = document.querySelector(".threshold-row:nth-child(1) label");
-  if (startLabel?.firstChild) startLabel.firstChild.nodeValue = `${t("charge.start")} `;
-  const endLabel = document.querySelector(".threshold-row:nth-child(2) label");
-  if (endLabel?.firstChild) endLabel.firstChild.nodeValue = `${t("charge.end")} `;
   document.querySelector("#rangeChips [data-range='300000']").textContent = t("range.5m");
   document.querySelector("#rangeChips [data-range='1800000']").textContent = t("range.30m");
   document.querySelector("#rangeChips [data-range='21600000']").textContent = t("range.6h");
@@ -364,7 +340,6 @@ function applyLanguage(language) {
   if (lastSnapshot) {
     renderBattery(lastSnapshot.battery);
     renderSources(lastSnapshot.sources);
-    renderChargeControl(lastSnapshot.charge_control);
     const d = new Date(lastSnapshot.timestamp_ms);
     $("lastUpdate").textContent = t("footer.updated", { time: d.toLocaleTimeString(currentLanguage) });
   }
@@ -488,60 +463,6 @@ function renderSources(sources) {
     })
     .join("");
 }
-
-let ccInitialized = false;
-function renderChargeControl(cc) {
-  if (!cc) return;
-  $("ccNote").textContent = cc.experimental_note;
-  const card = $("ccCard");
-  const btn = $("applyBtn");
-
-  if (!cc.supported) {
-    card.classList.add("disabled");
-    btn.disabled = true;
-    return;
-  }
-  // 已支持：允许调节；写权限不足时按钮仍可点，但应用会如实报错
-  if (!ccInitialized) {
-    if (cc.end_threshold > 0) {
-      $("endSlider").value = cc.end_threshold;
-      $("endVal").textContent = cc.end_threshold;
-    }
-    if (cc.start_threshold > 0) {
-      $("startSlider").value = cc.start_threshold;
-      $("startVal").textContent = cc.start_threshold;
-    }
-    ccInitialized = true;
-  }
-  btn.disabled = false;
-  if (!cc.writable) {
-    $("ccNote").textContent = t("charge.noWrite", { note: cc.experimental_note });
-  }
-}
-
-// ---------- 充电控制交互 ----------
-$("startSlider").addEventListener("input", (e) => {
-  $("startVal").textContent = e.target.value;
-});
-$("endSlider").addEventListener("input", (e) => {
-  $("endVal").textContent = e.target.value;
-});
-
-$("applyBtn").addEventListener("click", async () => {
-  const start = parseInt($("startSlider").value, 10);
-  const end = parseInt($("endSlider").value, 10);
-  const result = $("applyResult");
-  result.className = "apply-result";
-  result.textContent = t("charge.writing");
-  try {
-    const msg = await invoke("set_charge_threshold", { start, end });
-    result.className = "apply-result ok";
-    result.textContent = "✓ " + msg;
-  } catch (err) {
-    result.className = "apply-result err";
-    result.textContent = "✗ " + err;
-  }
-});
 
 // ---------- 监测曲线（实时滚动 + 多档分时）----------
 const METRICS = {
@@ -775,7 +696,6 @@ async function tick() {
     lastSnapshot = snap;
     renderBattery(snap.battery);
     renderSources(snap.sources);
-    renderChargeControl(snap.charge_control);
     if (snap.battery) pushBuffer(snap.battery, snap.timestamp_ms);
     // 监测页可见时跟随主轮询实时刷新曲线（短档平滑滚动，长档查后端历史）。
     if (isMonitorActive()) refreshChart();

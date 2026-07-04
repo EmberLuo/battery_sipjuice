@@ -1,7 +1,6 @@
 //! Battery SipJuice — 库入口。
 
 mod battery;
-mod charge_control;
 mod commands;
 mod history;
 mod power;
@@ -138,7 +137,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_snapshot,
-            commands::set_charge_threshold,
             commands::get_history,
             commands::get_settings,
             commands::save_settings,
