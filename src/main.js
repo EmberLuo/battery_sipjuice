@@ -431,7 +431,7 @@ function renderBattery(b) {
     b.status === "Charging"
       ? t("time.toFull", { time: fmtTime(b.time_to_full_min) })
       : fmtTime(b.time_to_empty_min);
-  $("hPower").textContent = b.power_now == null ? "—" : `${fmt(Math.abs(b.power_now), 2)} W`;
+  $("hPower").textContent = b.power_now == null ? "—" : `${fmt(b.power_now, 2)} W`;
   $("hTemp").textContent = b.temperature == null ? "—" : `${fmt(b.temperature, 1)} °C`;
 
   // 概览摘要（仪表盘：寿命 + 容量，原始电气读数归监测页）
@@ -460,7 +460,7 @@ function renderBattery(b) {
   $("pOcv").textContent = b.voltage_ocv == null ? "—" : `${fmt(b.voltage_ocv, 3)} V`;
   $("pVmax").textContent = b.voltage_max == null ? "—" : `${fmt(b.voltage_max, 3)} V`;
   $("pCurrent").textContent = b.current_now == null ? "—" : `${fmt(b.current_now, 0)} mA`;
-  $("pPower").textContent = b.power_now == null ? "—" : `${fmt(Math.abs(b.power_now), 2)} W`;
+  $("pPower").textContent = b.power_now == null ? "—" : `${fmt(b.power_now, 2)} W`;
   $("pTemp").textContent = b.temperature == null ? "—" : `${fmt(b.temperature, 1)} °C`;
 }
 
