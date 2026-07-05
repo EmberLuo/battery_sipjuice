@@ -25,10 +25,10 @@
 
     <!-- 标签导航 -->
     <nav class="tabs">
-      <button class="tab active" data-tab="overview">概览</button>
-      <button class="tab" data-tab="monitor">监测</button>
-      <button class="tab" data-tab="health">健康</button>
-      <button class="tab" data-tab="settings">设置</button>
+      <button class="tab active" data-tab="overview" data-i18n="tab.overview">概览</button>
+      <button class="tab" data-tab="monitor" data-i18n="tab.monitor">监测</button>
+      <button class="tab" data-tab="health" data-i18n="tab.health">健康</button>
+      <button class="tab" data-tab="settings" data-i18n="tab.settings">设置</button>
     </nav>
 
     <main class="content">
@@ -46,28 +46,55 @@
             </div>
           </div>
           <div class="hero-meta">
-            <div class="meta-row"><span>状态</span><b id="hStatus">—</b></div>
-            <div class="meta-row"><span>剩余时间</span><b id="hTime">—</b></div>
-            <div class="meta-row"><span>功率</span><b id="hPower">—</b></div>
-            <div class="meta-row"><span>温度</span><b id="hTemp">—</b></div>
+            <div class="meta-row"><span data-i18n="stat.status">状态</span><b id="hStatus">—</b></div>
+            <div class="meta-row"><span data-i18n="stat.timeRemaining">剩余时间</span><b id="hTime">—</b></div>
+            <div class="meta-row"><span data-i18n="stat.power">功率</span><b id="hPower">—</b></div>
+            <div class="meta-row"><span data-i18n="stat.temperature">温度</span><b id="hTemp">—</b></div>
+          </div>
+        </div>
+
+        <div class="prediction-card">
+          <div class="prediction-head">
+            <div>
+              <h3 data-i18n="prediction.title">当前功率预测</h3>
+              <p id="predictionNote">按当前功率估算，负载变化会让结果跟着变化。</p>
+            </div>
+          </div>
+          <div class="prediction-grid">
+            <div class="prediction-item">
+              <span data-i18n="prediction.full">预计充满</span>
+              <b id="predFull">—</b>
+            </div>
+            <div class="prediction-item">
+              <span id="predHighLabel">高电量阈值</span>
+              <b id="predHigh">—</b>
+            </div>
+            <div class="prediction-item">
+              <span id="predLowLabel">低电量阈值</span>
+              <b id="predLow">—</b>
+            </div>
+            <div class="prediction-item">
+              <span data-i18n="prediction.empty">预计没电</span>
+              <b id="predEmpty">—</b>
+            </div>
           </div>
         </div>
 
         <div class="grid">
           <div class="stat-card">
-            <span class="stat-label">容量健康</span>
+            <span class="stat-label" data-i18n="stat.health">容量健康</span>
             <span class="stat-value" id="oHealth">—</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">循环次数</span>
+            <span class="stat-label" data-i18n="stat.cycles">循环次数</span>
             <span class="stat-value" id="oCycles">—</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">实际满电容量</span>
+            <span class="stat-label" data-i18n="stat.fullCapacity">实际满电容量</span>
             <span class="stat-value" id="oCapNow">—</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">设计容量</span>
+            <span class="stat-label" data-i18n="stat.designCapacity">设计容量</span>
             <span class="stat-value" id="oCapDesign">—</span>
           </div>
         </div>
@@ -79,30 +106,30 @@
           <div class="health-score" id="healthScore">--<small>%</small></div>
           <div class="health-bar-wrap">
             <div class="health-bar"><div class="health-bar-fill" id="healthBar"></div></div>
-            <p class="health-note" id="healthNote">容量健康 = 当前满电容量 / 设计容量</p>
+            <p class="health-note" id="healthNote" data-i18n="health.note">容量健康 = 当前满电容量 / 设计容量</p>
           </div>
         </div>
         <div class="grid">
-          <div class="stat-card"><span class="stat-label">实际满电容量</span><span class="stat-value" id="capNow">—</span></div>
-          <div class="stat-card"><span class="stat-label">设计容量</span><span class="stat-value" id="capDesign">—</span></div>
-          <div class="stat-card"><span class="stat-label">已损耗</span><span class="stat-value" id="capLost">—</span></div>
-          <div class="stat-card"><span class="stat-label">充电循环</span><span class="stat-value" id="hCycles">—</span></div>
-          <div class="stat-card"><span class="stat-label">健康状态</span><span class="stat-value" id="hHealthStatus">—</span></div>
-          <div class="stat-card"><span class="stat-label">驱动 SOH</span><span class="stat-value" id="hSoh">—</span></div>
-          <div class="stat-card"><span class="stat-label">电池技术</span><span class="stat-value" id="hTech">—</span></div>
-          <div class="stat-card"><span class="stat-label">内阻</span><span class="stat-value" id="hResistance">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.fullCapacity">实际满电容量</span><span class="stat-value" id="capNow">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.designCapacity">设计容量</span><span class="stat-value" id="capDesign">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.capacityLost">已损耗</span><span class="stat-value" id="capLost">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.chargeCycles">充电循环</span><span class="stat-value" id="hCycles">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.healthStatus">健康状态</span><span class="stat-value" id="hHealthStatus">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.driverSoh">驱动 SOH</span><span class="stat-value" id="hSoh">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.technology">电池技术</span><span class="stat-value" id="hTech">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.resistance">内阻</span><span class="stat-value" id="hResistance">—</span></div>
         </div>
       </section>
 
       <!-- 监测：实时电气读数 + 实时滚动曲线 -->
       <section class="panel" id="monitor">
         <div class="grid">
-          <div class="stat-card"><span class="stat-label">瞬时电压</span><span class="stat-value" id="pVoltage">—</span></div>
-          <div class="stat-card"><span class="stat-label">开路电压(OCV)</span><span class="stat-value" id="pOcv">—</span></div>
-          <div class="stat-card"><span class="stat-label">最大电压</span><span class="stat-value" id="pVmax">—</span></div>
-          <div class="stat-card"><span class="stat-label">瞬时电流</span><span class="stat-value" id="pCurrent">—</span></div>
-          <div class="stat-card"><span class="stat-label">功率</span><span class="stat-value" id="pPower">—</span></div>
-          <div class="stat-card"><span class="stat-label">温度</span><span class="stat-value" id="pTemp">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.voltageNow">瞬时电压</span><span class="stat-value" id="pVoltage">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.ocv">开路电压(OCV)</span><span class="stat-value" id="pOcv">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.vmax">最大电压</span><span class="stat-value" id="pVmax">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.currentNow">瞬时电流</span><span class="stat-value" id="pCurrent">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.power">功率</span><span class="stat-value" id="pPower">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.temperature">温度</span><span class="stat-value" id="pTemp">—</span></div>
         </div>
 
         <div class="chart-card">
@@ -115,33 +142,33 @@
               <button class="chip" data-metric="curr">电流 mA</button>
             </div>
             <div class="chip-row" id="rangeChips">
-              <button class="chip range active" data-range="300000">5 分</button>
-              <button class="chip range" data-range="1800000">30 分</button>
-              <button class="chip range" data-range="21600000">6 时</button>
-              <button class="chip range" data-range="86400000">24 时</button>
-              <button class="chip range" data-range="604800000">7 天</button>
+              <button class="chip range active" data-range="300000" data-i18n="range.5m">5 分</button>
+              <button class="chip range" data-range="1800000" data-i18n="range.30m">30 分</button>
+              <button class="chip range" data-range="21600000" data-i18n="range.6h">6 时</button>
+              <button class="chip range" data-range="86400000" data-i18n="range.24h">24 时</button>
+              <button class="chip range" data-range="604800000" data-i18n="range.7d">7 天</button>
             </div>
           </div>
           <div class="chart-area">
             <svg class="chart-svg" id="chartSvg" viewBox="0 0 600 240" preserveAspectRatio="none"></svg>
-            <p class="chart-empty" id="chartEmpty">正在采集数据…曲线会随时间逐渐填充。</p>
+            <p class="chart-empty" id="chartEmpty" data-i18n="chart.empty">正在采集数据…曲线会随时间逐渐填充。</p>
           </div>
           <div class="chart-legend">
-            <span class="lg-band"></span> 充电时段
+            <span class="lg-band"></span> <span data-i18n="chart.chargingPeriod">充电时段</span>
             <span class="lg-sep">·</span>
             <span class="lg-line"></span> <span id="chartMetricName">电量</span>
           </div>
         </div>
         <div class="grid">
-          <div class="stat-card"><span class="stat-label">当前</span><span class="stat-value" id="sCur">—</span></div>
-          <div class="stat-card"><span class="stat-label">区间最小</span><span class="stat-value" id="sMin">—</span></div>
-          <div class="stat-card"><span class="stat-label">区间最大</span><span class="stat-value" id="sMax">—</span></div>
-          <div class="stat-card"><span class="stat-label">区间平均</span><span class="stat-value" id="sAvg">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.current">当前</span><span class="stat-value" id="sCur">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.min">区间最小</span><span class="stat-value" id="sMin">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.max">区间最大</span><span class="stat-value" id="sMax">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.avg">区间平均</span><span class="stat-value" id="sAvg">—</span></div>
         </div>
 
-        <h3 class="section-h">输入电源</h3>
+        <h3 class="section-h" data-i18n="section.powerSource">输入电源</h3>
         <div id="sourceList" class="source-list">
-          <p class="empty-hint">未检测到外接电源</p>
+          <p class="empty-hint" data-i18n="source.empty">未检测到外接电源</p>
         </div>
       </section>
 
@@ -154,7 +181,7 @@
               <div class="setting-name" data-i18n="settings.language.name">界面语言</div>
               <div class="setting-desc" data-i18n="settings.language.desc">切换应用内显示文字</div>
             </div>
-            <div class="segmented-tiles" id="setLanguage" role="radiogroup" aria-label="界面语言">
+            <div class="segmented-tiles" id="setLanguage" role="radiogroup" aria-label="界面语言" data-i18n-aria="settings.language.name">
               <button type="button" class="segment-tile active" data-setting-value="zh-CN" role="radio" aria-checked="true">
                 <span class="segment-title">简体中文</span>
                 <span class="segment-sub">Chinese</span>
@@ -170,7 +197,7 @@
               <div class="setting-name" data-i18n="settings.theme.name">外观主题</div>
               <div class="setting-desc" data-i18n="settings.theme.desc">选择浅色、深色或跟随系统</div>
             </div>
-            <div class="segmented-tiles three" id="setTheme" role="radiogroup" aria-label="外观主题">
+            <div class="segmented-tiles three" id="setTheme" role="radiogroup" aria-label="外观主题" data-i18n-aria="settings.theme.name">
               <button type="button" class="segment-tile active" data-setting-value="system" role="radio" aria-checked="true">
                 <span class="segment-title" data-i18n="theme.system">跟随系统</span>
                 <span class="segment-sub" data-i18n="theme.system.sub">自动</span>
@@ -187,12 +214,12 @@
           </div>
         </div>
 
-        <h3 class="section-h">常规</h3>
+        <h3 class="section-h" data-i18n="section.general">常规</h3>
         <div class="settings-card">
           <div class="setting-row">
             <div class="setting-text">
-              <div class="setting-name">开机自启动</div>
-              <div class="setting-desc">登录系统后自动启动 Battery SipJuice</div>
+              <div class="setting-name" data-i18n="settings.autostart.name">开机自启动</div>
+              <div class="setting-desc" data-i18n="settings.autostart.desc">登录系统后自动启动 Battery SipJuice</div>
             </div>
             <label class="switch">
               <input type="checkbox" id="setAutostart" />
@@ -201,8 +228,8 @@
           </div>
           <div class="setting-row">
             <div class="setting-text">
-              <div class="setting-name">静默启动</div>
-              <div class="setting-desc">启动时不显示窗口，仅在系统托盘运行</div>
+              <div class="setting-name" data-i18n="settings.silent.name">静默启动</div>
+              <div class="setting-desc" data-i18n="settings.silent.desc">启动时不显示窗口，仅在系统托盘运行</div>
             </div>
             <label class="switch">
               <input type="checkbox" id="setSilentStart" />
@@ -211,31 +238,47 @@
           </div>
           <div class="setting-row">
             <div class="setting-text">
-              <div class="setting-name">关闭按钮行为</div>
-              <div class="setting-desc">点击窗口关闭按钮(✕)时的动作</div>
+              <div class="setting-name" data-i18n="settings.close.name">关闭按钮行为</div>
+              <div class="setting-desc" data-i18n="settings.close.desc">点击窗口关闭按钮(✕)时的动作</div>
             </div>
             <div class="setting-dropdown" id="closeActionDropdown">
               <input type="hidden" id="setCloseAction" value="ask" />
               <button class="setting-select" id="setCloseActionButton" type="button" aria-haspopup="listbox" aria-expanded="false">
-                <span id="setCloseActionLabel">每次询问</span>
+                <span id="setCloseActionLabel" data-i18n="close.ask">每次询问</span>
                 <span class="select-caret"></span>
               </button>
-              <div class="setting-menu" id="setCloseActionMenu" role="listbox" aria-label="关闭按钮行为">
-                <button type="button" role="option" data-value="ask" aria-selected="true">每次询问</button>
-                <button type="button" role="option" data-value="tray" aria-selected="false">最小化到托盘</button>
-                <button type="button" role="option" data-value="exit" aria-selected="false">退出应用</button>
+              <div class="setting-menu" id="setCloseActionMenu" role="listbox" aria-label="关闭按钮行为" data-i18n-aria="settings.close.name">
+                <button type="button" role="option" data-value="ask" aria-selected="true" data-i18n="close.ask">每次询问</button>
+                <button type="button" role="option" data-value="tray" aria-selected="false" data-i18n="close.tray">最小化到托盘</button>
+                <button type="button" role="option" data-value="exit" aria-selected="false" data-i18n="close.exit">退出应用</button>
               </div>
             </div>
           </div>
         </div>
 
-        <h3 class="section-h">电池养护提醒</h3>
-        <p class="section-sub">按电量阈值弹出系统通知，纯软件实现，任何设备都能用，不改变充电行为。</p>
+        <h3 class="section-h" data-i18n="section.energy">能耗控制</h3>
+        <p class="section-sub" data-i18n="settings.energy.desc">比系统省电模式更强，直接限制 CPU 频率上限，适合后台编译、下载、低电量和发热时使用。</p>
         <div class="settings-card">
           <div class="setting-row">
             <div class="setting-text">
-              <div class="setting-name">低电量提醒</div>
-              <div class="setting-desc">放电时电量低于阈值，提醒接上电源</div>
+              <div class="setting-name" data-i18n="settings.super.name">超级省电模式</div>
+              <div class="setting-desc" data-i18n="settings.super.desc">限制各组 CPU 核心最高频率，降低峰值功耗和发热。</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setSuperPowerSaver" />
+              <span class="slider-sw"></span>
+            </label>
+          </div>
+          <div class="power-mode-status" id="superPowerStatus" data-i18n="settings.super.checking">正在读取 CPU 频率策略…</div>
+        </div>
+
+        <h3 class="section-h" data-i18n="section.reminders">电池养护提醒</h3>
+        <p class="section-sub" data-i18n="settings.reminders.desc">按电量阈值弹出系统通知，纯软件实现，任何设备都能用，不改变充电行为。</p>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name" data-i18n="settings.low.name">低电量提醒</div>
+              <div class="setting-desc" data-i18n="settings.low.desc">放电时电量低于阈值，提醒接上电源</div>
             </div>
             <div class="setting-trailing">
               <div class="threshold-input">
@@ -250,8 +293,8 @@
           </div>
           <div class="setting-row">
             <div class="setting-text">
-              <div class="setting-name">高电量提醒</div>
-              <div class="setting-desc">充电时电量高于阈值，提醒拔掉电源</div>
+              <div class="setting-name" data-i18n="settings.high.name">高电量提醒</div>
+              <div class="setting-desc" data-i18n="settings.high.desc">充电时电量高于阈值，提醒拔掉电源</div>
             </div>
             <div class="setting-trailing">
               <div class="threshold-input">
@@ -266,34 +309,34 @@
           </div>
         </div>
 
-        <h3 class="section-h">关于</h3>
+        <h3 class="section-h" data-i18n="section.about">关于</h3>
         <div class="about-card">
-          <div class="meta-row"><span>应用</span><b>Battery SipJuice</b></div>
-          <div class="meta-row"><span>版本</span><b id="aboutVersion">0.3.1</b></div>
-          <div class="meta-row"><span>数据来源</span><b>本机 sysfs · 无网络上报</b></div>
+          <div class="meta-row"><span data-i18n="about.app">应用</span><b>Battery SipJuice</b></div>
+          <div class="meta-row"><span data-i18n="about.version">版本</span><b id="aboutVersion">0.3.1</b></div>
+          <div class="meta-row"><span data-i18n="about.source">数据来源</span><b data-i18n="about.sourceValue">本机 sysfs · 无网络上报</b></div>
         </div>
       </section>
     </main>
 
     <footer class="footer">
       <span id="lastUpdate">—</span>
-      <span class="dev-tag">本机直读 sysfs · 无网络上报</span>
+      <span class="dev-tag" data-i18n="footer.privacy">本机直读 sysfs · 无网络上报</span>
     </footer>
   </div>
 
   <!-- 关闭确认弹框 -->
   <div class="modal-overlay" id="closeModal">
     <div class="modal">
-      <div class="modal-title">关闭 Battery SipJuice</div>
-      <p class="modal-body">你希望退出应用，还是最小化到系统托盘继续后台监控？</p>
+      <div class="modal-title" data-i18n="modal.title">关闭 Battery SipJuice</div>
+      <p class="modal-body" data-i18n="modal.body">你希望退出应用，还是最小化到系统托盘继续后台监控？</p>
       <label class="modal-remember">
         <input type="checkbox" id="closeRemember" />
-        <span>记住我的选择，不再询问</span>
+        <span data-i18n="modal.remember">记住我的选择，不再询问</span>
       </label>
       <div class="modal-actions">
-        <button class="modal-btn ghost" id="closeCancel">取消</button>
-        <button class="modal-btn" id="closeTray">最小化到托盘</button>
-        <button class="modal-btn danger" id="closeQuit">退出</button>
+        <button class="modal-btn ghost" id="closeCancel" data-i18n="modal.cancel">取消</button>
+        <button class="modal-btn" id="closeTray" data-i18n="modal.tray">最小化到托盘</button>
+        <button class="modal-btn danger" id="closeQuit" data-i18n="modal.quit">退出</button>
       </div>
     </div>
   </div>

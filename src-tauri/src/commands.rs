@@ -1,6 +1,6 @@
 //! Tauri 命令层 — 暴露给前端的 IPC 接口。
 
-use crate::{battery, history, power, settings};
+use crate::{battery, cpu_power, history, power, settings};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
@@ -13,13 +13,6 @@ pub struct Snapshot {
     pub timestamp_ms: u64,
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
-
 /// 采集电池 + 电源的完整快照。前端定时轮询此命令。
 #[tauri::command]
 pub fn get_snapshot() -> Snapshot {
@@ -27,7 +20,7 @@ pub fn get_snapshot() -> Snapshot {
     Snapshot {
         battery: bat,
         sources: power::collect(),
-        timestamp_ms: now_ms(),
+        timestamp_ms: history::now_ms(),
     }
 }
 
@@ -66,6 +59,18 @@ pub fn save_settings(
         launcher.disable().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// 读取 CPU 超级省电模式状态。
+#[tauri::command]
+pub fn get_cpu_power_state() -> cpu_power::CpuPowerState {
+    cpu_power::state()
+}
+
+/// 开启/关闭超级省电模式。写 cpufreq sysfs 需要 pkexec 授权。
+#[tauri::command]
+pub fn set_super_power_saver(enabled: bool) -> Result<cpu_power::CpuPowerState, String> {
+    cpu_power::set_super_saver(enabled)
 }
 
 /// 隐藏主窗口（关闭按钮选择"最小化到托盘"时调用）。

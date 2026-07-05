@@ -39,7 +39,7 @@ const MAGIC: &[u8; 4] = b"BSR1";
 /// 内存归档始终是查询来源，崩溃至多丢失最近 ~5 分钟的细粒度点。
 const FLUSH_EVERY: u32 = 10;
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)

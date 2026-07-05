@@ -6,11 +6,13 @@ const { listen } = window.__TAURI__.event;
 const RING_CIRCUM = 2 * Math.PI * 52; // 与 styles.css 的 r=52 一致
 let currentLanguage = "zh-CN";
 let lastSnapshot = null;
+let lastCpuPowerState = null;
 
 const I18N = {
   "zh-CN": {
     "section.interface": "界面",
     "section.general": "常规",
+    "section.energy": "能耗控制",
     "section.reminders": "电池养护提醒",
     "section.powerSource": "输入电源",
     "section.about": "关于",
@@ -34,6 +36,19 @@ const I18N = {
     "settings.silent.desc": "启动时不显示窗口，仅在系统托盘运行",
     "settings.close.name": "关闭按钮行为",
     "settings.close.desc": "点击窗口关闭按钮(✕)时的动作",
+    "settings.energy.desc": "比系统省电模式更强，直接限制 CPU/GPU 频率上限，适合后台编译、下载、低电量和发热时使用。",
+    "settings.super.name": "超级省电模式",
+    "settings.super.desc": "限制各组 CPU 核心和 GPU 最高频率，降低峰值功耗和发热。",
+    "settings.super.checking": "正在读取 CPU/GPU 频率策略…",
+    "settings.super.applying": "正在请求管理员权限并切换 CPU/GPU 频率上限…",
+    "settings.super.active": "已开启 · {caps}",
+    "settings.super.inactive": "未开启 · 当前上限 {caps}",
+    "settings.super.wantOnMismatch": "你希望开启，但当前未生效 · 当前上限 {caps}",
+    "settings.super.wantOffMismatch": "检测到系统当前仍在限频 · 当前上限 {caps}",
+    "settings.super.reapply": "重新应用",
+    "settings.super.restore": "恢复默认",
+    "settings.super.unsupported": "当前系统没有暴露可调节的 CPU/GPU 频率策略。",
+    "settings.super.error": "切换失败：{message}",
     "settings.reminders.desc": "按电量阈值弹出系统通知，纯软件实现，任何设备都能用，不改变充电行为。",
     "settings.low.name": "低电量提醒",
     "settings.low.desc": "放电时电量低于阈值，提醒接上电源",
@@ -50,6 +65,17 @@ const I18N = {
     "stat.cycles": "循环次数",
     "stat.fullCapacity": "实际满电容量",
     "stat.designCapacity": "设计容量",
+    "prediction.title": "当前功率预测",
+    "prediction.note": "按当前 {power} 估算，负载变化会让结果跟着变化。",
+    "prediction.note.empty": "缺少当前功率或容量数据，暂时无法估算。",
+    "prediction.full": "预计充满",
+    "prediction.high": "到达 {threshold}% 以上",
+    "prediction.low": "低于 {threshold}% 以下",
+    "prediction.empty": "预计没电",
+    "prediction.reached.high": "已高于 {threshold}%",
+    "prediction.reached.low": "已低于 {threshold}%",
+    "prediction.direction.charging": "正在充电",
+    "prediction.direction.discharging": "正在放电",
     "stat.capacityLost": "已损耗",
     "stat.chargeCycles": "充电循环",
     "stat.healthStatus": "健康状态",
@@ -113,6 +139,7 @@ const I18N = {
   "en-US": {
     "section.interface": "Interface",
     "section.general": "General",
+    "section.energy": "Power Control",
     "section.reminders": "Battery Care Reminders",
     "section.powerSource": "Power Sources",
     "section.about": "About",
@@ -136,6 +163,19 @@ const I18N = {
     "settings.silent.desc": "Start hidden and keep running in the tray",
     "settings.close.name": "Close Button",
     "settings.close.desc": "What happens when you click the window close button",
+    "settings.energy.desc": "Stronger than the system power saver. It directly caps CPU/GPU frequency for background compiling, downloads, low battery, and heat.",
+    "settings.super.name": "Super Power Saver",
+    "settings.super.desc": "Caps each CPU cluster and GPU to reduce peak power and heat.",
+    "settings.super.checking": "Reading CPU/GPU frequency policies…",
+    "settings.super.applying": "Requesting administrator permission and changing CPU/GPU limits…",
+    "settings.super.active": "On · {caps}",
+    "settings.super.inactive": "Off · Current caps {caps}",
+    "settings.super.wantOnMismatch": "You want it on, but it is not active · Current caps {caps}",
+    "settings.super.wantOffMismatch": "The system is still frequency-limited · Current caps {caps}",
+    "settings.super.reapply": "Apply Again",
+    "settings.super.restore": "Restore Defaults",
+    "settings.super.unsupported": "This system does not expose adjustable CPU/GPU frequency policies.",
+    "settings.super.error": "Failed to switch: {message}",
     "settings.reminders.desc": "Show system notifications at battery thresholds. Software only, works on any device, and does not change charging behavior.",
     "settings.low.name": "Low Battery Reminder",
     "settings.low.desc": "Notify when discharging below the threshold",
@@ -152,6 +192,17 @@ const I18N = {
     "stat.cycles": "Cycle Count",
     "stat.fullCapacity": "Full Capacity",
     "stat.designCapacity": "Design Capacity",
+    "prediction.title": "Current Power Forecast",
+    "prediction.note": "Estimated from current {power}. It will change as the load changes.",
+    "prediction.note.empty": "Missing current power or capacity data, so no forecast is available yet.",
+    "prediction.full": "Full",
+    "prediction.high": "Above {threshold}%",
+    "prediction.low": "Below {threshold}%",
+    "prediction.empty": "Empty",
+    "prediction.reached.high": "Already above {threshold}%",
+    "prediction.reached.low": "Already below {threshold}%",
+    "prediction.direction.charging": "Charging",
+    "prediction.direction.discharging": "Discharging",
     "stat.capacityLost": "Capacity Lost",
     "stat.chargeCycles": "Charge Cycles",
     "stat.healthStatus": "Health Status",
@@ -215,7 +266,7 @@ const I18N = {
 };
 
 const t = (key, params = {}) => {
-  let text = I18N[currentLanguage]?.[key] ?? I18N["zh-CN"][key] ?? key;
+  let text = I18N[currentLanguage]?.[key] ?? I18N["en-US"]?.[key] ?? key;
   Object.entries(params).forEach(([name, value]) => {
     text = text.replace(`{${name}}`, value);
   });
@@ -236,68 +287,6 @@ document.querySelectorAll(".tab").forEach((tab) => {
 const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 0) => (n == null || isNaN(n) ? "—" : Number(n).toFixed(d));
 const valueWithUnit = (v, d = 0) => (v ? `${fmt(v.value, d)} ${v.unit}` : "—");
-
-const STATIC_TEXT = [
-  [".tabs [data-tab='overview']", "tab.overview"],
-  [".tabs [data-tab='monitor']", "tab.monitor"],
-  [".tabs [data-tab='health']", "tab.health"],
-  [".tabs [data-tab='settings']", "tab.settings"],
-  ["#overview .hero-meta .meta-row:nth-child(1) span", "stat.status"],
-  ["#overview .hero-meta .meta-row:nth-child(2) span", "stat.timeRemaining"],
-  ["#overview .hero-meta .meta-row:nth-child(3) span", "stat.power"],
-  ["#overview .hero-meta .meta-row:nth-child(4) span", "stat.temperature"],
-  ["#overview .grid .stat-card:nth-child(1) .stat-label", "stat.health"],
-  ["#overview .grid .stat-card:nth-child(2) .stat-label", "stat.cycles"],
-  ["#overview .grid .stat-card:nth-child(3) .stat-label", "stat.fullCapacity"],
-  ["#overview .grid .stat-card:nth-child(4) .stat-label", "stat.designCapacity"],
-  ["#health .grid .stat-card:nth-child(1) .stat-label", "stat.fullCapacity"],
-  ["#health .grid .stat-card:nth-child(2) .stat-label", "stat.designCapacity"],
-  ["#health .grid .stat-card:nth-child(3) .stat-label", "stat.capacityLost"],
-  ["#health .grid .stat-card:nth-child(4) .stat-label", "stat.chargeCycles"],
-  ["#health .grid .stat-card:nth-child(5) .stat-label", "stat.healthStatus"],
-  ["#health .grid .stat-card:nth-child(6) .stat-label", "stat.driverSoh"],
-  ["#health .grid .stat-card:nth-child(7) .stat-label", "stat.technology"],
-  ["#health .grid .stat-card:nth-child(8) .stat-label", "stat.resistance"],
-  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(1) .stat-label", "stat.voltageNow"],
-  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(2) .stat-label", "stat.ocv"],
-  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(3) .stat-label", "stat.vmax"],
-  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(4) .stat-label", "stat.currentNow"],
-  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(5) .stat-label", "stat.power"],
-  ["#monitor > .grid:nth-of-type(1) .stat-card:nth-child(6) .stat-label", "stat.temperature"],
-  ["#monitor > .grid:nth-of-type(3) .stat-card:nth-child(1) .stat-label", "stat.current"],
-  ["#monitor > .grid:nth-of-type(3) .stat-card:nth-child(2) .stat-label", "stat.min"],
-  ["#monitor > .grid:nth-of-type(3) .stat-card:nth-child(3) .stat-label", "stat.max"],
-  ["#monitor > .grid:nth-of-type(3) .stat-card:nth-child(4) .stat-label", "stat.avg"],
-  ["#healthNote", "health.note"],
-  ["#chartEmpty", "chart.empty"],
-  ["#sourceList .empty-hint", "source.empty"],
-  ["#monitor > .section-h", "section.powerSource"],
-  ["#settings > .section-h:nth-of-type(2)", "section.general"],
-  ["#settings > .section-h:nth-of-type(3)", "section.reminders"],
-  ["#settings > .section-h:nth-of-type(4)", "section.about"],
-  ["#settings > .section-sub", "settings.reminders.desc"],
-  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(1) .setting-name", "settings.autostart.name"],
-  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(1) .setting-desc", "settings.autostart.desc"],
-  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(2) .setting-name", "settings.silent.name"],
-  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(2) .setting-desc", "settings.silent.desc"],
-  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(3) .setting-name", "settings.close.name"],
-  ["#settings .settings-card:nth-of-type(2) .setting-row:nth-child(3) .setting-desc", "settings.close.desc"],
-  ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(1) .setting-name", "settings.low.name"],
-  ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(1) .setting-desc", "settings.low.desc"],
-  ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(2) .setting-name", "settings.high.name"],
-  ["#settings .settings-card:nth-of-type(3) .setting-row:nth-child(2) .setting-desc", "settings.high.desc"],
-  [".about-card .meta-row:nth-child(1) span", "about.app"],
-  [".about-card .meta-row:nth-child(2) span", "about.version"],
-  [".about-card .meta-row:nth-child(3) span", "about.source"],
-  [".about-card .meta-row:nth-child(3) b", "about.sourceValue"],
-  [".footer .dev-tag", "footer.privacy"],
-  [".modal-title", "modal.title"],
-  [".modal-body", "modal.body"],
-  [".modal-remember span", "modal.remember"],
-  ["#closeCancel", "modal.cancel"],
-  ["#closeTray", "modal.tray"],
-  ["#closeQuit", "modal.quit"],
-];
 
 function applyTheme(theme) {
   const next = ["system", "light", "dark"].includes(theme) ? theme : "system";
@@ -320,23 +309,15 @@ function applyLanguage(language) {
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(el.dataset.i18n);
   });
-  STATIC_TEXT.forEach(([selector, key]) => {
-    const el = document.querySelector(selector);
-    if (el) el.textContent = t(key);
+  document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    el.setAttribute("aria-label", t(el.dataset.i18nAria));
   });
   document.querySelectorAll("#metricChips [data-metric]").forEach((btn) => {
     const metric = METRICS[btn.dataset.metric];
     btn.textContent = `${t(metric.nameKey)} ${metric.unit}`;
   });
-  const legend = document.querySelector(".chart-legend");
-  const band = legend?.querySelector(".lg-band");
-  if (band?.nextSibling) band.nextSibling.nodeValue = ` ${t("chart.chargingPeriod")} `;
-  document.querySelector("#rangeChips [data-range='300000']").textContent = t("range.5m");
-  document.querySelector("#rangeChips [data-range='1800000']").textContent = t("range.30m");
-  document.querySelector("#rangeChips [data-range='21600000']").textContent = t("range.6h");
-  document.querySelector("#rangeChips [data-range='86400000']").textContent = t("range.24h");
-  document.querySelector("#rangeChips [data-range='604800000']").textContent = t("range.7d");
   setCloseActionValue(settings.close_action);
+  if (lastCpuPowerState) renderSuperPowerSaver(lastCpuPowerState);
   if (lastSnapshot) {
     renderBattery(lastSnapshot.battery);
     renderSources(lastSnapshot.sources);
@@ -377,10 +358,76 @@ function statusLabel(s) {
   );
 }
 
+function fullEnergyWh(b) {
+  const full = b?.full_capacity;
+  if (!full) return null;
+  if (full.unit === "Wh") return full.value;
+  if (full.unit === "mAh") {
+    const voltage = b.voltage_now ?? b.voltage_ocv ?? b.voltage_max;
+    return voltage == null ? null : (full.value * voltage) / 1000;
+  }
+  return null;
+}
+
+// 仅用于任意阈值(用户自定义的低/高提醒百分比)的到达时间预测——
+// 到 0%/100% 的用时已由后端 time_to_empty_min/time_to_full_min 给出，直接复用即可。
+function minutesForPercentDelta(b, deltaPct) {
+  const energyWh = fullEnergyWh(b);
+  const powerW = b?.power_now == null ? null : Math.abs(b.power_now);
+  if (energyWh == null || powerW == null || powerW < 0.01 || deltaPct <= 0) return null;
+  return Math.round((energyWh * (deltaPct / 100) / powerW) * 60);
+}
+
+function renderPowerPrediction(b) {
+  const ids = ["predFull", "predHigh", "predLow", "predEmpty"];
+  const setAllEmpty = (note = t("prediction.note.empty")) => {
+    ids.forEach((id) => ($(id).textContent = "—"));
+    $("predictionNote").textContent = note;
+  };
+
+  const low = Number(settings.remind_charge_at ?? 30);
+  const high = Number(settings.remind_unplug_at ?? 80);
+  $("predHighLabel").textContent = t("prediction.high", { threshold: high });
+  $("predLowLabel").textContent = t("prediction.low", { threshold: low });
+
+  if (!b || b.capacity == null) {
+    setAllEmpty();
+    return;
+  }
+
+  const powerW = b.power_now == null ? null : Math.abs(b.power_now);
+  if (powerW == null || powerW < 0.01 || fullEnergyWh(b) == null) {
+    setAllEmpty();
+    return;
+  }
+
+  const cap = Number(b.capacity);
+  ids.forEach((id) => ($(id).textContent = "—"));
+  $("predictionNote").textContent = t("prediction.note", { power: `${fmt(powerW, 2)} W` });
+
+  if (b.status === "Charging") {
+    $("predFull").textContent = fmtTime(b.time_to_full_min);
+    $("predHigh").textContent =
+      cap >= high
+        ? t("prediction.reached.high", { threshold: high })
+        : fmtTime(minutesForPercentDelta(b, high - cap));
+  } else if (b.status === "Discharging") {
+    $("predLow").textContent =
+      cap <= low
+        ? t("prediction.reached.low", { threshold: low })
+        : fmtTime(minutesForPercentDelta(b, cap - low));
+    $("predEmpty").textContent = fmtTime(b.time_to_empty_min);
+  } else if (b.status === "Full") {
+    $("predFull").textContent = statusLabel("Full");
+    $("predHigh").textContent = t("prediction.reached.high", { threshold: high });
+  }
+}
+
 // ---------- 渲染 ----------
 function renderBattery(b) {
   if (!b) {
     $("statusText").textContent = t("status.noBattery");
+    renderPowerPrediction(null);
     return;
   }
 
@@ -429,6 +476,7 @@ function renderBattery(b) {
   $("hSoh").textContent = b.state_of_health == null ? "—" : `${b.state_of_health} %`;
   $("hTech").textContent = b.technology || "—";
   $("hResistance").textContent = b.internal_resistance == null ? "—" : `${fmt(b.internal_resistance, 0)} mΩ`;
+  renderPowerPrediction(b);
 
   // 监测页（电池侧实时电气量）
   $("pVoltage").textContent = b.voltage_now == null ? "—" : `${fmt(b.voltage_now, 3)} V`;
@@ -441,27 +489,45 @@ function renderBattery(b) {
 
 function renderSources(sources) {
   const list = $("sourceList");
+  list.replaceChildren();
   const online = sources.filter((s) => s.online === true);
   if (online.length === 0) {
-    list.innerHTML = `<p class="empty-hint">${t("source.empty.battery")}</p>`;
+    const hint = document.createElement("p");
+    hint.className = "empty-hint";
+    hint.textContent = t("source.empty.battery");
+    list.appendChild(hint);
     return;
   }
-  list.innerHTML = online
-    .map((s) => {
-      const icon = s.kind === "Wireless" ? "📡" : s.kind === "Mains" ? "⚡" : "🔌";
-      const detail = `${fmt(s.voltage_now, 2)} V · ${fmt(s.current_now, 0)} mA${
-        s.usb_type ? " · " + s.usb_type : ""
-      }`;
-      return `<div class="source-item">
-        <div class="src-icon">${icon}</div>
-        <div class="src-body">
-          <div class="src-name">${sourceLabel(s.kind)}</div>
-          <div class="src-detail">${detail}</div>
-        </div>
-        <div class="src-state on">${t("source.online")}</div>
-      </div>`;
-    })
-    .join("");
+  online.forEach((s) => {
+    const icon = s.kind === "Wireless" ? "📡" : s.kind === "Mains" ? "⚡" : "🔌";
+    const detail = `${fmt(s.voltage_now, 2)} V · ${fmt(s.current_now, 0)} mA${
+      s.usb_type ? " · " + s.usb_type : ""
+    }`;
+
+    const item = document.createElement("div");
+    item.className = "source-item";
+
+    const iconEl = document.createElement("div");
+    iconEl.className = "src-icon";
+    iconEl.textContent = icon;
+
+    const body = document.createElement("div");
+    body.className = "src-body";
+    const name = document.createElement("div");
+    name.className = "src-name";
+    name.textContent = sourceLabel(s.kind);
+    const detailEl = document.createElement("div");
+    detailEl.className = "src-detail";
+    detailEl.textContent = detail;
+    body.append(name, detailEl);
+
+    const state = document.createElement("div");
+    state.className = "src-state on";
+    state.textContent = t("source.online");
+
+    item.append(iconEl, body, state);
+    list.appendChild(item);
+  });
 }
 
 // ---------- 监测曲线（实时滚动 + 多档分时）----------
@@ -722,6 +788,7 @@ let settings = {
   autostart: false,
   silent_start: false,
   close_action: "ask",
+  super_power_saver: false,
   remind_charge: true,
   remind_charge_at: 30,
   remind_unplug: true,
@@ -768,8 +835,121 @@ async function loadSettings() {
     $("setRemindUnplug").checked = settings.remind_unplug;
     $("setRemindUnplugAt").value = settings.remind_unplug_at;
     syncReminderInputs();
+    refreshSuperPowerSaver();
   } catch (err) {
     console.error(err);
+  }
+}
+
+const freqLabel = (khz) => {
+  if (khz == null || isNaN(khz)) return "—";
+  return khz >= 1000000 ? `${(khz / 1000000).toFixed(2)} GHz` : `${Math.round(khz / 1000)} MHz`;
+};
+
+const freqHzLabel = (hz) => {
+  if (hz == null || isNaN(hz)) return "—";
+  return hz >= 1000000000 ? `${(hz / 1000000000).toFixed(2)} GHz` : `${Math.round(hz / 1000000)} MHz`;
+};
+
+const powerCapsLabel = (state) => {
+  const parts = [];
+  if (state?.policies?.length) {
+    parts.push(`CPU ${state.policies.map((p) => freqLabel(p.max_freq)).join(" / ")}`);
+  }
+  if (state?.gpus?.length) {
+    parts.push(`GPU ${state.gpus.map((g) => freqHzLabel(g.max_freq)).join(" / ")}`);
+  }
+  return parts.length ? parts.join(" · ") : "—";
+};
+
+function setSuperPowerStatus(text, className = "power-mode-status", action = null) {
+  const status = $("superPowerStatus");
+  status.className = className;
+  status.replaceChildren();
+
+  const label = document.createElement("span");
+  label.textContent = text;
+  status.appendChild(label);
+
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "power-mode-action";
+    button.textContent = action.label;
+    button.addEventListener("click", action.onClick);
+    status.appendChild(button);
+  }
+}
+
+function renderSuperPowerSaver(state, busy = false) {
+  const toggle = $("setSuperPowerSaver");
+  const desired = !!settings.super_power_saver;
+  if (busy) {
+    toggle.disabled = true;
+    toggle.checked = desired;
+    setSuperPowerStatus(t("settings.super.applying"));
+    return;
+  }
+  if (!state?.supported) {
+    lastCpuPowerState = state;
+    toggle.checked = false;
+    toggle.disabled = true;
+    setSuperPowerStatus(t("settings.super.unsupported"), "power-mode-status warning");
+    return;
+  }
+  toggle.disabled = false;
+  toggle.checked = desired;
+  lastCpuPowerState = state;
+  const actual = !!state.active;
+  const caps = powerCapsLabel(state);
+
+  if (desired && actual) {
+    setSuperPowerStatus(t("settings.super.active", { caps }), "power-mode-status active");
+  } else if (desired && !actual) {
+    setSuperPowerStatus(
+      t("settings.super.wantOnMismatch", { caps }),
+      "power-mode-status warning",
+      {
+        label: t("settings.super.reapply"),
+        onClick: () => applySuperPowerSaver(true),
+      }
+    );
+  } else if (!desired && actual) {
+    setSuperPowerStatus(
+      t("settings.super.wantOffMismatch", { caps }),
+      "power-mode-status warning",
+      {
+        label: t("settings.super.restore"),
+        onClick: () => applySuperPowerSaver(false),
+      }
+    );
+  } else {
+    setSuperPowerStatus(t("settings.super.inactive", { caps }));
+  }
+}
+
+async function refreshSuperPowerSaver() {
+  try {
+    setSuperPowerStatus(t("settings.super.checking"));
+    const state = await invoke("get_cpu_power_state");
+    renderSuperPowerSaver(state);
+  } catch (err) {
+    setSuperPowerStatus(t("settings.super.error", { message: String(err) }), "power-mode-status warning");
+  }
+}
+
+async function applySuperPowerSaver(enabled) {
+  const previousDesired = !!settings.super_power_saver;
+  settings.super_power_saver = enabled;
+  renderSuperPowerSaver(lastCpuPowerState, true);
+  try {
+    const state = await invoke("set_super_power_saver", { enabled });
+    renderSuperPowerSaver(state);
+    persistSettings();
+  } catch (err) {
+    settings.super_power_saver = previousDesired;
+    setSuperPowerStatus(t("settings.super.error", { message: String(err) }), "power-mode-status warning");
+    await refreshSuperPowerSaver();
   }
 }
 
@@ -795,6 +975,9 @@ $("setSilentStart").addEventListener("change", (e) => {
   settings.silent_start = e.target.checked;
   persistSettings();
 });
+$("setSuperPowerSaver").addEventListener("change", async (e) => {
+  applySuperPowerSaver(e.target.checked);
+});
 
 function wireSegmentedSetting(groupId, key, apply) {
   $(groupId).addEventListener("click", (e) => {
@@ -819,6 +1002,7 @@ function commitThreshold(inputId, key, lo, hi) {
   v = Math.min(hi, Math.max(lo, v));
   el.value = v;
   settings[key] = v;
+  if (lastSnapshot?.battery) renderPowerPrediction(lastSnapshot.battery);
   persistSettings();
 }
 

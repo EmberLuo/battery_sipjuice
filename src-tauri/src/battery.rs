@@ -215,7 +215,7 @@ fn read_power(dev: &str, voltage_now: Option<f64>, current_now: Option<f64>) -> 
     }
 }
 
-/// 由剩余容量与瞬时电流/功率估算放电或充电剩余时间。
+/// 由剩余容量与瞬时功率估算放电或充电剩余时间。
 fn estimate_times(b: &BatteryInfo) -> (Option<i64>, Option<i64>) {
     let Some(capacity) = b.capacity else {
         return (None, None);
@@ -227,30 +227,45 @@ fn estimate_times(b: &BatteryInfo) -> (Option<i64>, Option<i64>) {
     let pct = capacity as f64 / 100.0;
     let status = b.status.as_deref().unwrap_or("");
 
-    let rate_per_hour = if full.unit == "mAh" {
-        match b.current_now {
-            Some(v) => v.abs(),
-            None => return (None, None),
-        }
-    } else if full.unit == "Wh" {
-        match b.power_now {
-            Some(v) => v.abs(),
-            None => return (None, None),
-        }
-    } else {
-        return (None, None);
-    };
+    let (full_amount, rate_per_hour) =
+        if let (Some(full_wh), Some(power)) = (full_energy_wh(b), b.power_now.map(f64::abs)) {
+            (full_wh, power)
+        } else if full.unit == "mAh" {
+            let Some(current) = b.current_now.map(f64::abs) else {
+                return (None, None);
+            };
+            (full.value, current)
+        } else if full.unit == "Wh" {
+            let Some(power) = b.power_now.map(f64::abs) else {
+                return (None, None);
+            };
+            (full.value, power)
+        } else {
+            return (None, None);
+        };
     if rate_per_hour < 0.01 {
         return (None, None);
     }
 
-    let now = pct * full.value;
+    let now = pct * full_amount;
     if status == "Charging" {
-        let remain = (full.value - now).max(0.0);
+        let remain = (full_amount - now).max(0.0);
         (None, Some((remain / rate_per_hour * 60.0) as i64))
     } else if status == "Discharging" {
         (Some((now / rate_per_hour * 60.0) as i64), None)
     } else {
         (None, None)
+    }
+}
+
+fn full_energy_wh(b: &BatteryInfo) -> Option<f64> {
+    let full = b.full_capacity.as_ref()?;
+    if full.unit == "Wh" {
+        Some(full.value)
+    } else if full.unit == "mAh" {
+        let voltage = b.voltage_now.or(b.voltage_ocv).or(b.voltage_max)?;
+        Some(full.value * voltage / 1000.0)
+    } else {
+        None
     }
 }
