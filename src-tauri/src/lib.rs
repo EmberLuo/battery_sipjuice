@@ -8,6 +8,7 @@ mod history;
 mod power;
 mod reminder;
 mod settings;
+mod system_accent;
 
 use std::time::Duration;
 use tauri::{
@@ -154,6 +155,7 @@ pub fn run() {
             commands::get_history,
             commands::get_settings,
             commands::get_app_version,
+            commands::get_system_accent_color,
             commands::save_settings,
             commands::get_cpu_power_state,
             commands::set_super_power_saver,

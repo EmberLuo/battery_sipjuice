@@ -1,6 +1,6 @@
 //! Tauri 命令层 — 暴露给前端的 IPC 接口。
 
-use crate::{app_power, battery, cpu_power, history, power, settings};
+use crate::{app_power, battery, cpu_power, history, power, settings, system_accent};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
@@ -49,6 +49,12 @@ pub fn get_settings(store: tauri::State<'_, settings::SettingsStore>) -> setting
 #[tauri::command]
 pub fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// 读取系统强调色。当前优先支持 GNOME/Ubuntu 的 org.gnome.desktop.interface accent-color。
+#[tauri::command]
+pub fn get_system_accent_color() -> Option<system_accent::SystemAccentColor> {
+    system_accent::detect()
 }
 
 /// 整体保存应用设置，并同步开机自启状态到系统。

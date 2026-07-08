@@ -31,6 +31,14 @@ const translations = {
     "theme.light.sub": "明亮",
     "theme.dark": "深色",
     "theme.dark.sub": "低亮度",
+    "settings.accent.name": "主题颜色",
+    "settings.accent.desc": "选择蓝色、橙色或跟随系统强调色",
+    "accent.blue": "蓝色",
+    "accent.blue.sub": "原配色",
+    "accent.orange": "橙色",
+    "accent.orange.sub": "小米橙",
+    "accent.system": "跟随系统",
+    "accent.system.sub": "系统强调色",
     "settings.autostart.name": "开机自启动",
     "settings.autostart.desc": "登录系统后自动启动 Battery SipJuice",
     "settings.silent.name": "静默启动",
@@ -178,6 +186,14 @@ const translations = {
     "theme.light.sub": "Bright",
     "theme.dark": "Dark",
     "theme.dark.sub": "Low light",
+    "settings.accent.name": "Theme Color",
+    "settings.accent.desc": "Choose blue, orange, or the system accent color",
+    "accent.blue": "Blue",
+    "accent.blue.sub": "Original",
+    "accent.orange": "Orange",
+    "accent.orange.sub": "Xiaomi orange",
+    "accent.system": "Follow System",
+    "accent.system.sub": "System accent",
     "settings.autostart.name": "Launch at Login",
     "settings.autostart.desc": "Start Battery SipJuice when you sign in",
     "settings.silent.name": "Silent Start",
@@ -329,11 +345,84 @@ const formatNumber = (value, decimals = 0) =>
   value == null || isNaN(value) ? "—" : Number(value).toFixed(decimals);
 const formatValueWithUnit = (quantity, decimals = 0) =>
   quantity ? `${formatNumber(quantity.value, decimals)} ${quantity.unit}` : "—";
+const ACCENT_COLOR_VALUES = ["blue", "orange", "system"];
+const ACCENT_CSS_VARIABLES = [
+  "--accent",
+  "--accent-strong",
+  "--accent-soft",
+  "--accent-hover-border",
+  "--accent-outline",
+  "--accent-active-border",
+  "--accent-inset",
+];
+const SYSTEM_ACCENT_REFRESH_MS = 30_000;
+
+function capacityRingColor(capacity) {
+  const percentage = Math.min(100, Math.max(0, Number(capacity) || 0));
+  const hue = percentage * 1.2;
+  return `hsl(${hue}, 72%, 46%)`;
+}
+
+function normalizeAccentColor(accentColor) {
+  if (accentColor === "default") return "orange";
+  return ACCENT_COLOR_VALUES.includes(accentColor) ? accentColor : "orange";
+}
+
+function hexToRgb(hex) {
+  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex ?? "");
+  if (!match) return null;
+  return [parseInt(match[1], 16), parseInt(match[2], 16), parseInt(match[3], 16)];
+}
+
+function colorWithAlpha(hex, alpha) {
+  const rgb = hexToRgb(hex);
+  return rgb ? `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})` : null;
+}
 
 function applyTheme(theme) {
   const next = ["system", "light", "dark"].includes(theme) ? theme : "system";
   if (next === "system") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.dataset.theme = next;
+}
+
+function clearAccentOverrides() {
+  ACCENT_CSS_VARIABLES.forEach((name) => document.documentElement.style.removeProperty(name));
+}
+
+function applyAccentPalette(accent) {
+  if (!accent?.color) return;
+  const strong = accent.strong || accent.color;
+  const soft = colorWithAlpha(accent.color, 0.12);
+  const hover = colorWithAlpha(accent.color, 0.45);
+  const outline = colorWithAlpha(accent.color, 0.7);
+  const active = colorWithAlpha(accent.color, 0.72);
+  const inset = colorWithAlpha(accent.color, 0.22);
+  if (!soft || !hover || !outline || !active || !inset) return;
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--accent", accent.color);
+  rootStyle.setProperty("--accent-strong", strong);
+  rootStyle.setProperty("--accent-soft", soft);
+  rootStyle.setProperty("--accent-hover-border", hover);
+  rootStyle.setProperty("--accent-outline", outline);
+  rootStyle.setProperty("--accent-active-border", active);
+  rootStyle.setProperty("--accent-inset", inset);
+}
+
+async function refreshSystemAccentColor() {
+  try {
+    const accent = await invoke("get_system_accent_color");
+    if (settings.accent_color === "system") applyAccentPalette(accent);
+  } catch (err) {
+    console.error("读取系统强调色失败:", err);
+  }
+}
+
+function applyAccentColor(accentColor) {
+  const next = normalizeAccentColor(accentColor);
+  settings.accent_color = next;
+  clearAccentOverrides();
+  document.documentElement.dataset.accentColor = next;
+  if (next === "system") refreshSystemAccentColor();
 }
 
 function setSegmentedValue(groupId, value) {
@@ -515,7 +604,7 @@ function renderBattery(battery) {
   const ring = byId("ring");
   const percentage = battery.capacity ?? 0;
   ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - percentage / 100);
-  ring.style.stroke = percentage <= 15 ? "var(--bad)" : percentage <= 30 ? "var(--warn)" : "var(--accent)";
+  ring.style.stroke = capacityRingColor(percentage);
 
   // hero 元信息
   byId("heroStatus").textContent = statusLabel(battery.status);
@@ -1215,6 +1304,7 @@ loadAppVersion();
 let settings = {
   language: "zh-CN",
   theme: "system",
+  accent_color: "orange",
   autostart: false,
   silent_start: false,
   close_action: "ask",
@@ -1253,9 +1343,12 @@ async function loadSettings() {
     settings = await invoke("get_settings");
     settings.language = translations[settings.language] ? settings.language : "zh-CN";
     settings.theme = ["system", "light", "dark"].includes(settings.theme) ? settings.theme : "system";
+    settings.accent_color = normalizeAccentColor(settings.accent_color);
     setSegmentedValue("setLanguage", settings.language);
     setSegmentedValue("setTheme", settings.theme);
+    setSegmentedValue("setAccentColor", settings.accent_color);
     applyTheme(settings.theme);
+    applyAccentColor(settings.accent_color);
     applyLanguage(settings.language);
     byId("setAutostart").checked = settings.autostart;
     byId("setSilentStart").checked = settings.silent_start;
@@ -1427,6 +1520,7 @@ function wireSegmentedSetting(groupId, key, apply) {
 
 wireSegmentedSetting("setLanguage", "language", applyLanguage);
 wireSegmentedSetting("setTheme", "theme", applyTheme);
+wireSegmentedSetting("setAccentColor", "accent_color", applyAccentColor);
 
 // 阈值输入框失焦时夹取到合法范围并保存。
 function commitThreshold(inputId, key, minValue, maxValue) {
@@ -1502,3 +1596,6 @@ byId("closeQuit").addEventListener("click", () => {
 });
 
 loadSettings();
+setInterval(() => {
+  if (settings.accent_color === "system") refreshSystemAccentColor();
+}, SYSTEM_ACCENT_REFRESH_MS);

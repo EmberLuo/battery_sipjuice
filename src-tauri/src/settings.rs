@@ -26,6 +26,8 @@ pub struct Settings {
     pub language: String,
     /// 外观主题：system / light / dark。
     pub theme: String,
+    /// 主题强调色：blue / orange / system。
+    pub accent_color: String,
     /// 开机自启动。
     pub autostart: bool,
     /// 静默启动 —— 启动时不显示窗口，只显示托盘。
@@ -50,6 +52,7 @@ impl Default for Settings {
         Settings {
             language: "zh-CN".to_string(),
             theme: "system".to_string(),
+            accent_color: "orange".to_string(),
             autostart: false,
             silent_start: false,
             close_action: CloseAction::Ask,
