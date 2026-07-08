@@ -46,36 +46,36 @@
             </div>
           </div>
           <div class="hero-meta">
-            <div class="meta-row"><span data-i18n="stat.status">状态</span><b id="hStatus">—</b></div>
-            <div class="meta-row"><span data-i18n="stat.timeRemaining">剩余时间</span><b id="hTime">—</b></div>
-            <div class="meta-row"><span data-i18n="stat.power">功率</span><b id="hPower">—</b></div>
-            <div class="meta-row"><span data-i18n="stat.temperature">温度</span><b id="hTemp">—</b></div>
+            <div class="meta-row"><span data-i18n="stat.status">状态</span><b id="heroStatus">—</b></div>
+            <div class="meta-row"><span data-i18n="stat.timeRemaining">剩余使用时间</span><b id="heroTimeRemaining">—</b></div>
+            <div class="meta-row"><span data-i18n="stat.power">功率</span><b id="heroPower">—</b></div>
+            <div class="meta-row"><span data-i18n="stat.temperature">温度</span><b id="heroTemperature">—</b></div>
           </div>
         </div>
 
         <div class="prediction-card">
           <div class="prediction-head">
             <div>
-              <h3 data-i18n="prediction.title">当前功率预测</h3>
-              <p id="predictionNote">按当前功率估算，负载变化会让结果跟着变化。</p>
+              <h3 data-i18n="prediction.title">平均功率预测</h3>
+              <p id="predictionNote">按一段时间内的平均功率估算，负载变化会让结果跟着变化。</p>
             </div>
           </div>
           <div class="prediction-grid">
             <div class="prediction-item">
               <span data-i18n="prediction.full">预计充满</span>
-              <b id="predFull">—</b>
+              <b id="predictionFull">—</b>
             </div>
             <div class="prediction-item">
-              <span id="predHighLabel">高电量阈值</span>
-              <b id="predHigh">—</b>
+              <span id="predictionHighLabel">高电量阈值</span>
+              <b id="predictionHigh">—</b>
             </div>
             <div class="prediction-item">
-              <span id="predLowLabel">低电量阈值</span>
-              <b id="predLow">—</b>
+              <span id="predictionLowLabel">低电量阈值</span>
+              <b id="predictionLow">—</b>
             </div>
             <div class="prediction-item">
-              <span data-i18n="prediction.empty">预计没电</span>
-              <b id="predEmpty">—</b>
+              <span data-i18n="prediction.empty">剩余使用时间</span>
+              <b id="predictionEmpty">—</b>
             </div>
           </div>
         </div>
@@ -83,19 +83,19 @@
         <div class="grid">
           <div class="stat-card">
             <span class="stat-label" data-i18n="stat.health">容量健康</span>
-            <span class="stat-value" id="oHealth">—</span>
+            <span class="stat-value" id="overviewHealth">—</span>
           </div>
           <div class="stat-card">
             <span class="stat-label" data-i18n="stat.cycles">循环次数</span>
-            <span class="stat-value" id="oCycles">—</span>
+            <span class="stat-value" id="overviewCycles">—</span>
           </div>
           <div class="stat-card">
             <span class="stat-label" data-i18n="stat.fullCapacity">实际满电容量</span>
-            <span class="stat-value" id="oCapNow">—</span>
+            <span class="stat-value" id="overviewFullCapacity">—</span>
           </div>
           <div class="stat-card">
             <span class="stat-label" data-i18n="stat.designCapacity">设计容量</span>
-            <span class="stat-value" id="oCapDesign">—</span>
+            <span class="stat-value" id="overviewDesignCapacity">—</span>
           </div>
         </div>
       </section>
@@ -110,37 +110,45 @@
           </div>
         </div>
         <div class="grid">
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.fullCapacity">实际满电容量</span><span class="stat-value" id="capNow">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.designCapacity">设计容量</span><span class="stat-value" id="capDesign">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.capacityLost">已损耗</span><span class="stat-value" id="capLost">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.chargeCycles">充电循环</span><span class="stat-value" id="hCycles">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.healthStatus">健康状态</span><span class="stat-value" id="hHealthStatus">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.driverSoh">驱动 SOH</span><span class="stat-value" id="hSoh">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.technology">电池技术</span><span class="stat-value" id="hTech">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.resistance">内阻</span><span class="stat-value" id="hResistance">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.fullCapacity">实际满电容量</span><span class="stat-value" id="healthFullCapacity">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.designCapacity">设计容量</span><span class="stat-value" id="healthDesignCapacity">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.capacityLost">已损耗</span><span class="stat-value" id="healthCapacityLost">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.chargeCycles">充电循环</span><span class="stat-value" id="healthCycles">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.healthStatus">健康状态</span><span class="stat-value" id="healthCondition">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.driverSoh">驱动 SOH</span><span class="stat-value" id="healthStateOfHealth">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.technology">电池技术</span><span class="stat-value" id="healthTechnology">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.resistance">内阻</span><span class="stat-value" id="healthResistance">—</span></div>
         </div>
       </section>
 
       <!-- 监测：实时电气读数 + 实时滚动曲线 -->
       <section class="panel" id="monitor">
         <div class="grid">
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.voltageNow">瞬时电压</span><span class="stat-value" id="pVoltage">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.ocv">开路电压(OCV)</span><span class="stat-value" id="pOcv">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.vmax">最大电压</span><span class="stat-value" id="pVmax">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.currentNow">瞬时电流</span><span class="stat-value" id="pCurrent">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.power">功率</span><span class="stat-value" id="pPower">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.temperature">温度</span><span class="stat-value" id="pTemp">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.batteryVoltage">电池电压</span><span class="stat-value" id="monitorVoltage">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.ocv">开路电压(OCV)</span><span class="stat-value" id="monitorOpenCircuitVoltage">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.vmax">最大电压</span><span class="stat-value" id="monitorMaxVoltage">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.batteryCurrent">电池电流</span><span class="stat-value" id="monitorCurrent">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.batteryPower">电池功率</span><span class="stat-value" id="monitorPower">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.batteryTemperature">电池温度</span><span class="stat-value" id="monitorTemperature">—</span></div>
         </div>
 
         <div class="chart-card">
           <div class="chart-controls">
-            <div class="chip-row" id="metricChips">
-              <button class="chip active" data-metric="cap">电量 %</button>
-              <button class="chip" data-metric="pow">功率 W</button>
-              <button class="chip" data-metric="temp">温度 °C</button>
-              <button class="chip" data-metric="volt">电压 V</button>
-              <button class="chip" data-metric="curr">电流 mA</button>
+            <div class="chip-row" id="chartSourceChips">
+              <button class="chip active" data-source-kind="battery" data-i18n="chart.source.battery">电池侧</button>
+              <button class="chip" data-source-kind="input" data-i18n="chart.source.input">输入侧</button>
             </div>
+            <div class="chip-row" id="metricChips">
+              <button class="chip active" data-metric="capacity">电池电量 %</button>
+              <button class="chip" data-metric="power_w">电池功率 W</button>
+              <button class="chip" data-metric="temperature">电池温度 °C</button>
+              <button class="chip" data-metric="voltage">电池电压 V</button>
+              <button class="chip" data-metric="current_ma">电池电流 mA</button>
+            </div>
+            <label class="input-source-picker" id="inputSourcePicker" hidden>
+              <span data-i18n="chart.inputSource">输入来源</span>
+              <select id="inputSourceSelect" aria-label="输入来源" data-i18n-aria="chart.inputSource"></select>
+            </label>
             <div class="chip-row" id="rangeChips">
               <button class="chip range active" data-range="300000" data-i18n="range.5m">5 分</button>
               <button class="chip range" data-range="1800000" data-i18n="range.30m">30 分</button>
@@ -154,21 +162,36 @@
             <p class="chart-empty" id="chartEmpty" data-i18n="chart.empty">正在采集数据…曲线会随时间逐渐填充。</p>
           </div>
           <div class="chart-legend">
-            <span class="lg-band"></span> <span data-i18n="chart.chargingPeriod">充电时段</span>
+            <span class="lg-band"></span> <span id="chartBandLabel">充电时段</span>
             <span class="lg-sep">·</span>
             <span class="lg-line"></span> <span id="chartMetricName">电量</span>
           </div>
         </div>
         <div class="grid">
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.current">当前</span><span class="stat-value" id="sCur">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.min">区间最小</span><span class="stat-value" id="sMin">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.max">区间最大</span><span class="stat-value" id="sMax">—</span></div>
-          <div class="stat-card"><span class="stat-label" data-i18n="stat.avg">区间平均</span><span class="stat-value" id="sAvg">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.current">当前</span><span class="stat-value" id="chartCurrent">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.minimum">区间最小</span><span class="stat-value" id="chartMinimum">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.maximum">区间最大</span><span class="stat-value" id="chartMaximum">—</span></div>
+          <div class="stat-card"><span class="stat-label" data-i18n="stat.average">区间平均</span><span class="stat-value" id="chartAverage">—</span></div>
         </div>
 
         <h3 class="section-h" data-i18n="section.powerSource">输入电源</h3>
         <div id="sourceList" class="source-list">
           <p class="empty-hint" data-i18n="source.empty">未检测到外接电源</p>
+        </div>
+
+        <h3 class="section-h" data-i18n="section.appPower">应用耗电估算</h3>
+        <p class="section-hint" data-i18n="appPower.hint">按 CPU 占用时间估算，非硬件精确测量。</p>
+        <div class="app-power-block">
+          <div class="app-power-block-title" data-i18n="appPower.totalEnergy">本次运行累计耗电</div>
+          <div id="appEnergyList" class="app-power-list">
+            <p class="empty-hint" data-i18n="appPower.empty">正在采集数据…</p>
+          </div>
+        </div>
+        <div class="app-power-block">
+          <div class="app-power-block-title" data-i18n="appPower.currentPower">当前估算功率</div>
+          <div id="appPowerList" class="app-power-list">
+            <p class="empty-hint" data-i18n="appPower.empty">正在采集数据…</p>
+          </div>
         </div>
       </section>
 
@@ -312,15 +335,13 @@
         <h3 class="section-h" data-i18n="section.about">关于</h3>
         <div class="about-card">
           <div class="meta-row"><span data-i18n="about.app">应用</span><b>Battery SipJuice</b></div>
-          <div class="meta-row"><span data-i18n="about.version">版本</span><b id="aboutVersion">0.3.1</b></div>
-          <div class="meta-row"><span data-i18n="about.source">数据来源</span><b data-i18n="about.sourceValue">本机 sysfs · 无网络上报</b></div>
+          <div class="meta-row"><span data-i18n="about.version">版本</span><b id="aboutVersion">—</b></div>
         </div>
       </section>
     </main>
 
     <footer class="footer">
       <span id="lastUpdate">—</span>
-      <span class="dev-tag" data-i18n="footer.privacy">本机直读 sysfs · 无网络上报</span>
     </footer>
   </div>
 

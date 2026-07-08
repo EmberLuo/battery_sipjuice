@@ -8,7 +8,7 @@
 
 | 模块 | 内容 |
 |------|------|
-| **概览** | 环形电量、状态、剩余时间、功率、温度 |
+| **概览** | 环形电量、状态、剩余使用时间、功率、温度 |
 | **健康** | 实际/设计容量、损耗、循环次数、SoH、内阻 |
 | **电源** | 实时电压/电流/OCV、USB/无线充电输入状态 |
 | **充电控制** | 充电阈值封顶（实验性，见下） |
@@ -29,7 +29,7 @@
 ```bash
 sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
   libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-  libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+  libsoup-3.0-dev libjavascriptcoregtk-4.1-dev patchelf rpm
 ```
 
 还需要 [Rust 工具链](https://rustup.rs/) 和 Node.js。安装依赖：
@@ -44,11 +44,39 @@ npm install
 npm run dev
 ```
 
-### 打包（生成 .deb / AppImage）
+### 打包
+
+默认打包目标仍沿用 Tauri 配置（当前为 `.deb` / AppImage）：
 
 ```bash
 npm run build
 ```
+
+只构建当前机器架构的 Debian 包：
+
+```bash
+npm run build:deb
+```
+
+只构建当前机器架构的 RPM 包：
+
+```bash
+npm run build:rpm
+```
+
+同时构建当前机器架构的 `.deb` 和 `.rpm`：
+
+```bash
+npm run build:linux:packages
+```
+
+在 x86_64 Linux 构建机上生成 x64 `.deb` / `.rpm`：
+
+```bash
+npm run build:linux:x64
+```
+
+注意：Tauri 的 Linux 包是原生构建产物。ARM64 机器可以稳定构建 ARM64 包；x64 包建议在 x86_64 Linux 构建机或 CI 上构建。项目已包含 `.github/workflows/linux-x64-packages.yml`，打 tag 或手动触发即可产出 x64 deb/rpm artifact。
 
 ## 许可证
 

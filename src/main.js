@@ -3,18 +3,19 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
-const RING_CIRCUM = 2 * Math.PI * 52; // 与 styles.css 的 r=52 一致
+const RING_CIRCUMFERENCE = 2 * Math.PI * 52; // 与 styles.css 的 r=52 一致
 let currentLanguage = "zh-CN";
 let lastSnapshot = null;
 let lastCpuPowerState = null;
 
-const I18N = {
+const translations = {
   "zh-CN": {
     "section.interface": "界面",
     "section.general": "常规",
     "section.energy": "能耗控制",
     "section.reminders": "电池养护提醒",
     "section.powerSource": "输入电源",
+    "section.appPower": "应用耗电估算",
     "section.about": "关于",
     "tab.overview": "概览",
     "tab.monitor": "监测",
@@ -58,20 +59,20 @@ const I18N = {
     "close.tray": "最小化到托盘",
     "close.exit": "退出应用",
     "stat.status": "状态",
-    "stat.timeRemaining": "剩余时间",
+    "stat.timeRemaining": "剩余使用时间",
     "stat.power": "功率",
     "stat.temperature": "温度",
     "stat.health": "容量健康",
     "stat.cycles": "循环次数",
     "stat.fullCapacity": "实际满电容量",
     "stat.designCapacity": "设计容量",
-    "prediction.title": "当前功率预测",
-    "prediction.note": "按当前 {power} 估算，负载变化会让结果跟着变化。",
-    "prediction.note.empty": "缺少当前功率或容量数据，暂时无法估算。",
+    "prediction.title": "平均功率预测",
+    "prediction.note": "按近 {window} 平均 {power} 估算，负载变化会让结果跟着变化。",
+    "prediction.note.empty": "平均功率样本不足，暂时无法估算。",
     "prediction.full": "预计充满",
     "prediction.high": "到达 {threshold}% 以上",
     "prediction.low": "低于 {threshold}% 以下",
-    "prediction.empty": "预计没电",
+    "prediction.empty": "剩余使用时间",
     "prediction.reached.high": "已高于 {threshold}%",
     "prediction.reached.low": "已低于 {threshold}%",
     "prediction.direction.charging": "正在充电",
@@ -83,28 +84,50 @@ const I18N = {
     "stat.technology": "电池技术",
     "stat.resistance": "内阻",
     "stat.voltageNow": "瞬时电压",
+    "stat.batteryVoltage": "电池电压",
     "stat.ocv": "开路电压(OCV)",
     "stat.vmax": "最大电压",
     "stat.currentNow": "瞬时电流",
+    "stat.batteryCurrent": "电池电流",
+    "stat.batteryPower": "电池功率",
+    "stat.batteryTemperature": "电池温度",
     "stat.current": "当前",
-    "stat.min": "区间最小",
-    "stat.max": "区间最大",
-    "stat.avg": "区间平均",
+    "stat.minimum": "区间最小",
+    "stat.maximum": "区间最大",
+    "stat.average": "区间平均",
     "health.note": "容量健康 = 当前满电容量 / 设计容量",
-    "metric.cap": "电量",
-    "metric.pow": "功率",
-    "metric.temp": "温度",
-    "metric.volt": "电压",
-    "metric.curr": "电流",
+    "metric.battery.capacity": "电池电量",
+    "metric.battery.power": "电池功率",
+    "metric.battery.temperature": "电池温度",
+    "metric.battery.voltage": "电池电压",
+    "metric.battery.current": "电池电流",
+    "metric.input.energy": "输入电量",
+    "metric.input.power": "输入功率",
+    "metric.input.temperature": "输入温度",
+    "metric.input.voltage": "输入电压",
+    "metric.input.current": "输入电流",
+    "metric.unsupported": "不支持",
     "range.5m": "5 分",
     "range.30m": "30 分",
     "range.6h": "6 时",
     "range.24h": "24 时",
     "range.7d": "7 天",
     "chart.empty": "正在采集数据…曲线会随时间逐渐填充。",
+    "chart.empty.battery": "正在采集电池数据…曲线会随时间逐渐填充。",
+    "chart.empty.input": "未检测到可记录的输入源数据。",
+    "chart.source.battery": "电池侧",
+    "chart.source.input": "输入侧",
+    "chart.inputSource": "输入来源",
+    "chart.input.total": "总输入",
     "chart.chargingPeriod": "充电时段",
+    "chart.onlinePeriod": "在线时段",
     "source.empty": "未检测到外接电源",
     "source.empty.battery": "未检测到外接电源（当前使用电池供电）",
+    "appPower.hint": "按 CPU 占用时间估算，非硬件精确测量；累计值从本次应用启动开始计算。",
+    "appPower.empty": "正在采集数据…",
+    "appPower.totalEnergy": "本次运行累计耗电",
+    "appPower.currentPower": "当前估算功率",
+    "appPower.processCount": "{count} 个进程",
     "source.online": "在线",
     "source.usb": "USB 充电",
     "source.usbc": "USB-C 充电",
@@ -124,11 +147,8 @@ const I18N = {
     "time.minute": "分",
     "time.toFull": "充满约 {time}",
     "footer.updated": "更新于 {time}",
-    "footer.privacy": "本机直读 sysfs · 无网络上报",
     "about.app": "应用",
     "about.version": "版本",
-    "about.source": "数据来源",
-    "about.sourceValue": "本机 sysfs · 无网络上报",
     "modal.title": "关闭 Battery SipJuice",
     "modal.body": "你希望退出应用，还是最小化到系统托盘继续后台监控？",
     "modal.remember": "记住我的选择，不再询问",
@@ -142,6 +162,7 @@ const I18N = {
     "section.energy": "Power Control",
     "section.reminders": "Battery Care Reminders",
     "section.powerSource": "Power Sources",
+    "section.appPower": "Estimated App Power Usage",
     "section.about": "About",
     "tab.overview": "Overview",
     "tab.monitor": "Monitor",
@@ -185,20 +206,20 @@ const I18N = {
     "close.tray": "Minimize to Tray",
     "close.exit": "Quit App",
     "stat.status": "Status",
-    "stat.timeRemaining": "Time Remaining",
+    "stat.timeRemaining": "Remaining Use Time",
     "stat.power": "Power",
     "stat.temperature": "Temperature",
     "stat.health": "Capacity Health",
     "stat.cycles": "Cycle Count",
     "stat.fullCapacity": "Full Capacity",
     "stat.designCapacity": "Design Capacity",
-    "prediction.title": "Current Power Forecast",
-    "prediction.note": "Estimated from current {power}. It will change as the load changes.",
-    "prediction.note.empty": "Missing current power or capacity data, so no forecast is available yet.",
+    "prediction.title": "Average Power Forecast",
+    "prediction.note": "Estimated from the last {window} average {power}. It will change as the load changes.",
+    "prediction.note.empty": "Not enough average power samples yet, so no forecast is available.",
     "prediction.full": "Full",
     "prediction.high": "Above {threshold}%",
     "prediction.low": "Below {threshold}%",
-    "prediction.empty": "Empty",
+    "prediction.empty": "Remaining Use Time",
     "prediction.reached.high": "Already above {threshold}%",
     "prediction.reached.low": "Already below {threshold}%",
     "prediction.direction.charging": "Charging",
@@ -210,28 +231,50 @@ const I18N = {
     "stat.technology": "Technology",
     "stat.resistance": "Resistance",
     "stat.voltageNow": "Instant Voltage",
+    "stat.batteryVoltage": "Battery Voltage",
     "stat.ocv": "Open-Circuit Voltage",
     "stat.vmax": "Max Voltage",
     "stat.currentNow": "Instant Current",
+    "stat.batteryCurrent": "Battery Current",
+    "stat.batteryPower": "Battery Power",
+    "stat.batteryTemperature": "Battery Temperature",
     "stat.current": "Current",
-    "stat.min": "Range Min",
-    "stat.max": "Range Max",
-    "stat.avg": "Range Avg",
+    "stat.minimum": "Range Min",
+    "stat.maximum": "Range Max",
+    "stat.average": "Range Avg",
     "health.note": "Capacity health = current full capacity / design capacity",
-    "metric.cap": "Battery",
-    "metric.pow": "Power",
-    "metric.temp": "Temperature",
-    "metric.volt": "Voltage",
-    "metric.curr": "Current",
+    "metric.battery.capacity": "Battery Charge",
+    "metric.battery.power": "Battery Power",
+    "metric.battery.temperature": "Battery Temperature",
+    "metric.battery.voltage": "Battery Voltage",
+    "metric.battery.current": "Battery Current",
+    "metric.input.energy": "Input Energy",
+    "metric.input.power": "Input Power",
+    "metric.input.temperature": "Input Temperature",
+    "metric.input.voltage": "Input Voltage",
+    "metric.input.current": "Input Current",
+    "metric.unsupported": "Unsupported",
     "range.5m": "5 min",
     "range.30m": "30 min",
     "range.6h": "6 h",
     "range.24h": "24 h",
     "range.7d": "7 days",
     "chart.empty": "Collecting data… the chart will fill in over time.",
+    "chart.empty.battery": "Collecting battery data… the chart will fill in over time.",
+    "chart.empty.input": "No recordable input source data detected.",
+    "chart.source.battery": "Battery Side",
+    "chart.source.input": "Input Side",
+    "chart.inputSource": "Input Source",
+    "chart.input.total": "Total Input",
     "chart.chargingPeriod": "Charging period",
+    "chart.onlinePeriod": "Online period",
     "source.empty": "No external power detected",
     "source.empty.battery": "No external power detected (currently on battery)",
+    "appPower.hint": "Estimated from CPU time share, not exact hardware measurement; totals start from this app launch.",
+    "appPower.empty": "Collecting data…",
+    "appPower.totalEnergy": "Total Energy This Run",
+    "appPower.currentPower": "Current Estimated Power",
+    "appPower.processCount": "{count} processes",
     "source.online": "Online",
     "source.usb": "USB charging",
     "source.usbc": "USB-C charging",
@@ -251,11 +294,8 @@ const I18N = {
     "time.minute": "min",
     "time.toFull": "Full in about {time}",
     "footer.updated": "Updated at {time}",
-    "footer.privacy": "Local sysfs only · no network reporting",
     "about.app": "App",
     "about.version": "Version",
-    "about.source": "Data Source",
-    "about.sourceValue": "Local sysfs · no network reporting",
     "modal.title": "Close Battery SipJuice",
     "modal.body": "Do you want to quit the app, or minimize it to the tray and keep monitoring?",
     "modal.remember": "Remember my choice and do not ask again",
@@ -265,8 +305,8 @@ const I18N = {
   },
 };
 
-const t = (key, params = {}) => {
-  let text = I18N[currentLanguage]?.[key] ?? I18N["en-US"]?.[key] ?? key;
+const translate = (key, params = {}) => {
+  let text = translations[currentLanguage]?.[key] ?? translations["en-US"]?.[key] ?? key;
   Object.entries(params).forEach(([name, value]) => {
     text = text.replace(`{${name}}`, value);
   });
@@ -276,17 +316,19 @@ const t = (key, params = {}) => {
 // ---------- 标签切换 ----------
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach((tabButton) => tabButton.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach((panel) => panel.classList.remove("active"));
     tab.classList.add("active");
     document.getElementById(tab.dataset.tab).classList.add("active");
   });
 });
 
 // ---------- 工具函数 ----------
-const $ = (id) => document.getElementById(id);
-const fmt = (n, d = 0) => (n == null || isNaN(n) ? "—" : Number(n).toFixed(d));
-const valueWithUnit = (v, d = 0) => (v ? `${fmt(v.value, d)} ${v.unit}` : "—");
+const byId = (id) => document.getElementById(id);
+const formatNumber = (value, decimals = 0) =>
+  value == null || isNaN(value) ? "—" : Number(value).toFixed(decimals);
+const formatValueWithUnit = (quantity, decimals = 0) =>
+  quantity ? `${formatNumber(quantity.value, decimals)} ${quantity.unit}` : "—";
 
 function applyTheme(theme) {
   const next = ["system", "light", "dark"].includes(theme) ? theme : "system";
@@ -295,7 +337,7 @@ function applyTheme(theme) {
 }
 
 function setSegmentedValue(groupId, value) {
-  const group = $(groupId);
+  const group = byId(groupId);
   group.querySelectorAll("[data-setting-value]").forEach((btn) => {
     const active = btn.dataset.settingValue === value;
     btn.classList.toggle("active", active);
@@ -304,25 +346,25 @@ function setSegmentedValue(groupId, value) {
 }
 
 function applyLanguage(language) {
-  currentLanguage = I18N[language] ? language : "zh-CN";
+  currentLanguage = translations[language] ? language : "zh-CN";
   document.documentElement.lang = currentLanguage;
   document.querySelectorAll("[data-i18n]").forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
+    el.textContent = translate(el.dataset.i18n);
   });
   document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
-    el.setAttribute("aria-label", t(el.dataset.i18nAria));
+    el.setAttribute("aria-label", translate(el.dataset.i18nAria));
   });
-  document.querySelectorAll("#metricChips [data-metric]").forEach((btn) => {
-    const metric = METRICS[btn.dataset.metric];
-    btn.textContent = `${t(metric.nameKey)} ${metric.unit}`;
-  });
+  renderChartSourceChips();
+  renderMetricChips();
+  renderInputSourceOptions();
+  renderChartLegend();
   setCloseActionValue(settings.close_action);
   if (lastCpuPowerState) renderSuperPowerSaver(lastCpuPowerState);
   if (lastSnapshot) {
     renderBattery(lastSnapshot.battery);
     renderSources(lastSnapshot.sources);
-    const d = new Date(lastSnapshot.timestamp_ms);
-    $("lastUpdate").textContent = t("footer.updated", { time: d.toLocaleTimeString(currentLanguage) });
+    const date = new Date(lastSnapshot.timestamp_ms);
+    byId("lastUpdate").textContent = translate("footer.updated", { time: date.toLocaleTimeString(currentLanguage) });
   }
   if (isMonitorActive()) refreshChart();
 }
@@ -330,178 +372,204 @@ function applyLanguage(language) {
 function sourceLabel(kind) {
   return (
     {
-      USB: t("source.usb"),
-      USB_C: t("source.usbc"),
-      USB_PD: t("source.usbpd"),
-      Mains: t("source.mains"),
-      Wireless: t("source.wireless"),
-    }[kind] || kind || t("source.fallback")
+      USB: translate("source.usb"),
+      USB_C: translate("source.usbc"),
+      USB_PD: translate("source.usbpd"),
+      Mains: translate("source.mains"),
+      Wireless: translate("source.wireless"),
+    }[kind] || kind || translate("source.fallback")
   );
 }
 
-function fmtTime(min) {
-  if (!min || min <= 0) return "—";
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h > 0 ? `${h} ${t("time.hour")} ${m} ${t("time.minute")}` : `${m} ${t("time.minute")}`;
+function formatDuration(minutes) {
+  if (!minutes || minutes <= 0) return "—";
+  const hours = Math.floor(minutes / 60);
+  const minutePart = minutes % 60;
+  return hours > 0
+    ? `${hours} ${translate("time.hour")} ${minutePart} ${translate("time.minute")}`
+    : `${minutePart} ${translate("time.minute")}`;
 }
 
-function statusLabel(s) {
+function statusLabel(status) {
   return (
     {
-      Charging: t("status.charging"),
-      Discharging: t("status.discharging"),
-      Full: t("status.full"),
-      "Not charging": t("status.notCharging"),
-      Unknown: t("status.unknown"),
-    }[s] || s || "—"
+      Charging: translate("status.charging"),
+      Discharging: translate("status.discharging"),
+      Full: translate("status.full"),
+      "Not charging": translate("status.notCharging"),
+      Unknown: translate("status.unknown"),
+    }[status] || status || "—"
   );
 }
 
-function fullEnergyWh(b) {
-  const full = b?.full_capacity;
+function fullEnergyWh(battery) {
+  const full = battery?.full_capacity;
   if (!full) return null;
   if (full.unit === "Wh") return full.value;
   if (full.unit === "mAh") {
-    const voltage = b.voltage_now ?? b.voltage_ocv ?? b.voltage_max;
+    const voltage = battery.voltage_now ?? battery.voltage_ocv ?? battery.voltage_max;
     return voltage == null ? null : (full.value * voltage) / 1000;
   }
   return null;
 }
 
-// 仅用于任意阈值(用户自定义的低/高提醒百分比)的到达时间预测——
-// 到 0%/100% 的用时已由后端 time_to_empty_min/time_to_full_min 给出，直接复用即可。
-function minutesForPercentDelta(b, deltaPct) {
-  const energyWh = fullEnergyWh(b);
-  const powerW = b?.power_now == null ? null : Math.abs(b.power_now);
-  if (energyWh == null || powerW == null || powerW < 0.01 || deltaPct <= 0) return null;
-  return Math.round((energyWh * (deltaPct / 100) / powerW) * 60);
+const TIME_ESTIMATE_WINDOW_MS = 5 * 60_000;
+const TIME_ESTIMATE_MIN_SAMPLES = 5;
+
+function formatEstimateWindow(ms) {
+  const minutes = Math.round(ms / 60_000);
+  return currentLanguage === "zh-CN" ? `${minutes} 分钟` : `${minutes} min`;
 }
 
-function renderPowerPrediction(b) {
-  const ids = ["predFull", "predHigh", "predLow", "predEmpty"];
-  const setAllEmpty = (note = t("prediction.note.empty")) => {
-    ids.forEach((id) => ($(id).textContent = "—"));
-    $("predictionNote").textContent = note;
+function averagePowerForStatus(status) {
+  const direction = status === "Charging" ? 1 : status === "Discharging" ? -1 : 0;
+  if (!direction) return null;
+  const cutoff = Date.now() - TIME_ESTIMATE_WINDOW_MS;
+  const samples = batteryRtBuffer.filter((sample) => {
+    if (sample.timestamp_ms < cutoff || sample.power_w == null) return false;
+    return direction > 0 ? sample.power_w > 0 : sample.power_w < 0;
+  });
+  if (samples.length < TIME_ESTIMATE_MIN_SAMPLES) return null;
+  const averagePowerW = samples.reduce((sum, sample) => sum + Math.abs(sample.power_w), 0) / samples.length;
+  return averagePowerW >= 0.01 ? averagePowerW : null;
+}
+
+function minutesForPercentDelta(battery, percentDelta, averagePowerW) {
+  const energyWh = fullEnergyWh(battery);
+  if (energyWh == null || averagePowerW == null || averagePowerW < 0.01 || percentDelta <= 0) return null;
+  return Math.round((energyWh * (percentDelta / 100) / averagePowerW) * 60);
+}
+
+function remainingUseMinutes(battery) {
+  if (battery?.status !== "Discharging" || battery.capacity == null) return null;
+  return minutesForPercentDelta(battery, Number(battery.capacity), averagePowerForStatus("Discharging"));
+}
+
+function renderPowerPrediction(battery) {
+  const predictionIds = ["predictionFull", "predictionHigh", "predictionLow", "predictionEmpty"];
+  const setAllEmpty = (note = translate("prediction.note.empty")) => {
+    predictionIds.forEach((id) => (byId(id).textContent = "—"));
+    byId("predictionNote").textContent = note;
   };
 
-  const low = Number(settings.remind_charge_at ?? 30);
-  const high = Number(settings.remind_unplug_at ?? 80);
-  $("predHighLabel").textContent = t("prediction.high", { threshold: high });
-  $("predLowLabel").textContent = t("prediction.low", { threshold: low });
+  const lowThreshold = Number(settings.remind_charge_at ?? 30);
+  const highThreshold = Number(settings.remind_unplug_at ?? 80);
+  byId("predictionHighLabel").textContent = translate("prediction.high", { threshold: highThreshold });
+  byId("predictionLowLabel").textContent = translate("prediction.low", { threshold: lowThreshold });
 
-  if (!b || b.capacity == null) {
+  if (!battery || battery.capacity == null) {
     setAllEmpty();
     return;
   }
 
-  const powerW = b.power_now == null ? null : Math.abs(b.power_now);
-  if (powerW == null || powerW < 0.01 || fullEnergyWh(b) == null) {
+  const averagePowerW = averagePowerForStatus(battery.status);
+  if (averagePowerW == null || fullEnergyWh(battery) == null) {
     setAllEmpty();
     return;
   }
 
-  const cap = Number(b.capacity);
-  ids.forEach((id) => ($(id).textContent = "—"));
-  $("predictionNote").textContent = t("prediction.note", { power: `${fmt(powerW, 2)} W` });
+  const capacity = Number(battery.capacity);
+  predictionIds.forEach((id) => (byId(id).textContent = "—"));
+  byId("predictionNote").textContent = translate("prediction.note", {
+    window: formatEstimateWindow(TIME_ESTIMATE_WINDOW_MS),
+    power: `${formatNumber(averagePowerW, 2)} W`,
+  });
 
-  if (b.status === "Charging") {
-    $("predFull").textContent = fmtTime(b.time_to_full_min);
-    $("predHigh").textContent =
-      cap >= high
-        ? t("prediction.reached.high", { threshold: high })
-        : fmtTime(minutesForPercentDelta(b, high - cap));
-  } else if (b.status === "Discharging") {
-    $("predLow").textContent =
-      cap <= low
-        ? t("prediction.reached.low", { threshold: low })
-        : fmtTime(minutesForPercentDelta(b, cap - low));
-    $("predEmpty").textContent = fmtTime(b.time_to_empty_min);
-  } else if (b.status === "Full") {
-    $("predFull").textContent = statusLabel("Full");
-    $("predHigh").textContent = t("prediction.reached.high", { threshold: high });
+  if (battery.status === "Charging") {
+    byId("predictionFull").textContent = formatDuration(minutesForPercentDelta(battery, 100 - capacity, averagePowerW));
+    byId("predictionHigh").textContent =
+      capacity >= highThreshold
+        ? translate("prediction.reached.high", { threshold: highThreshold })
+        : formatDuration(minutesForPercentDelta(battery, highThreshold - capacity, averagePowerW));
+  } else if (battery.status === "Discharging") {
+    byId("predictionLow").textContent =
+      capacity <= lowThreshold
+        ? translate("prediction.reached.low", { threshold: lowThreshold })
+        : formatDuration(minutesForPercentDelta(battery, capacity - lowThreshold, averagePowerW));
+    byId("predictionEmpty").textContent = formatDuration(remainingUseMinutes(battery));
+  } else if (battery.status === "Full") {
+    byId("predictionFull").textContent = statusLabel("Full");
+    byId("predictionHigh").textContent = translate("prediction.reached.high", { threshold: highThreshold });
   }
 }
 
 // ---------- 渲染 ----------
-function renderBattery(b) {
-  if (!b) {
-    $("statusText").textContent = t("status.noBattery");
+function renderBattery(battery) {
+  if (!battery) {
+    byId("statusText").textContent = translate("status.noBattery");
     renderPowerPrediction(null);
     return;
   }
 
   // 状态条
-  $("modelName").textContent = b.model || b.manufacturer || b.device;
-  const pill = $("statusPill");
+  byId("modelName").textContent = battery.model || battery.manufacturer || battery.device;
+  const pill = byId("statusPill");
   pill.className = "status-pill";
-  if (b.status === "Charging") pill.classList.add("charging");
-  else if (b.status === "Discharging") pill.classList.add("discharging");
-  else if (b.status === "Full") pill.classList.add("full");
-  $("statusText").textContent = statusLabel(b.status);
+  if (battery.status === "Charging") pill.classList.add("charging");
+  else if (battery.status === "Discharging") pill.classList.add("discharging");
+  else if (battery.status === "Full") pill.classList.add("full");
+  byId("statusText").textContent = statusLabel(battery.status);
 
   // 环形进度
-  $("capacity").textContent = b.capacity ?? "--";
-  const ring = $("ring");
-  const pct = b.capacity ?? 0;
-  ring.style.strokeDashoffset = RING_CIRCUM * (1 - pct / 100);
-  ring.style.stroke = pct <= 15 ? "var(--bad)" : pct <= 30 ? "var(--warn)" : "var(--accent)";
+  byId("capacity").textContent = battery.capacity ?? "--";
+  const ring = byId("ring");
+  const percentage = battery.capacity ?? 0;
+  ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - percentage / 100);
+  ring.style.stroke = percentage <= 15 ? "var(--bad)" : percentage <= 30 ? "var(--warn)" : "var(--accent)";
 
   // hero 元信息
-  $("hStatus").textContent = statusLabel(b.status);
-  $("hTime").textContent =
-    b.status === "Charging"
-      ? t("time.toFull", { time: fmtTime(b.time_to_full_min) })
-      : fmtTime(b.time_to_empty_min);
-  $("hPower").textContent = b.power_now == null ? "—" : `${fmt(b.power_now, 2)} W`;
-  $("hTemp").textContent = b.temperature == null ? "—" : `${fmt(b.temperature, 1)} °C`;
+  byId("heroStatus").textContent = statusLabel(battery.status);
+  byId("heroTimeRemaining").textContent = formatDuration(remainingUseMinutes(battery));
+  byId("heroPower").textContent = battery.power_now == null ? "—" : `${formatNumber(battery.power_now, 2)} W`;
+  byId("heroTemperature").textContent = battery.temperature == null ? "—" : `${formatNumber(battery.temperature, 1)} °C`;
 
   // 概览摘要（仪表盘：寿命 + 容量，原始电气读数归监测页）
-  $("oHealth").textContent = `${fmt(b.health_percent, 1)} %`;
-  $("oCycles").textContent = b.cycle_count ?? "—";
-  $("oCapNow").textContent = valueWithUnit(b.full_capacity, 0);
-  $("oCapDesign").textContent = valueWithUnit(b.design_capacity, 0);
+  byId("overviewHealth").textContent = `${formatNumber(battery.health_percent, 1)} %`;
+  byId("overviewCycles").textContent = battery.cycle_count ?? "—";
+  byId("overviewFullCapacity").textContent = formatValueWithUnit(battery.full_capacity, 0);
+  byId("overviewDesignCapacity").textContent = formatValueWithUnit(battery.design_capacity, 0);
 
   // 健康页
-  $("healthScore").innerHTML = `${fmt(b.health_percent, 1)}<small>%</small>`;
-  $("healthBar").style.width = `${Math.min(b.health_percent ?? 0, 100)}%`;
-  $("capNow").textContent = valueWithUnit(b.full_capacity, 0);
-  $("capDesign").textContent = valueWithUnit(b.design_capacity, 0);
-  const lost = b.full_capacity && b.design_capacity && b.full_capacity.unit === b.design_capacity.unit
-    ? { value: b.design_capacity.value - b.full_capacity.value, unit: b.full_capacity.unit }
+  byId("healthScore").innerHTML = `${formatNumber(battery.health_percent, 1)}<small>%</small>`;
+  byId("healthBar").style.width = `${Math.min(battery.health_percent ?? 0, 100)}%`;
+  byId("healthFullCapacity").textContent = formatValueWithUnit(battery.full_capacity, 0);
+  byId("healthDesignCapacity").textContent = formatValueWithUnit(battery.design_capacity, 0);
+  const lostCapacity = battery.full_capacity && battery.design_capacity && battery.full_capacity.unit === battery.design_capacity.unit
+    ? { value: battery.design_capacity.value - battery.full_capacity.value, unit: battery.full_capacity.unit }
     : null;
-  $("capLost").textContent = lost ? `${fmt(lost.value, 0)} ${lost.unit}` : "—";
-  $("hCycles").textContent = b.cycle_count ?? "—";
-  $("hHealthStatus").textContent = b.health_status || "—";
-  $("hSoh").textContent = b.state_of_health == null ? "—" : `${b.state_of_health} %`;
-  $("hTech").textContent = b.technology || "—";
-  $("hResistance").textContent = b.internal_resistance == null ? "—" : `${fmt(b.internal_resistance, 0)} mΩ`;
-  renderPowerPrediction(b);
+  byId("healthCapacityLost").textContent = lostCapacity ? `${formatNumber(lostCapacity.value, 0)} ${lostCapacity.unit}` : "—";
+  byId("healthCycles").textContent = battery.cycle_count ?? "—";
+  byId("healthCondition").textContent = battery.health_status || "—";
+  byId("healthStateOfHealth").textContent = battery.state_of_health == null ? "—" : `${battery.state_of_health} %`;
+  byId("healthTechnology").textContent = battery.technology || "—";
+  byId("healthResistance").textContent =
+    battery.internal_resistance == null ? "—" : `${formatNumber(battery.internal_resistance, 0)} mΩ`;
+  renderPowerPrediction(battery);
 
   // 监测页（电池侧实时电气量）
-  $("pVoltage").textContent = b.voltage_now == null ? "—" : `${fmt(b.voltage_now, 3)} V`;
-  $("pOcv").textContent = b.voltage_ocv == null ? "—" : `${fmt(b.voltage_ocv, 3)} V`;
-  $("pVmax").textContent = b.voltage_max == null ? "—" : `${fmt(b.voltage_max, 3)} V`;
-  $("pCurrent").textContent = b.current_now == null ? "—" : `${fmt(b.current_now, 0)} mA`;
-  $("pPower").textContent = b.power_now == null ? "—" : `${fmt(b.power_now, 2)} W`;
-  $("pTemp").textContent = b.temperature == null ? "—" : `${fmt(b.temperature, 1)} °C`;
+  byId("monitorVoltage").textContent = battery.voltage_now == null ? "—" : `${formatNumber(battery.voltage_now, 3)} V`;
+  byId("monitorOpenCircuitVoltage").textContent = battery.voltage_ocv == null ? "—" : `${formatNumber(battery.voltage_ocv, 3)} V`;
+  byId("monitorMaxVoltage").textContent = battery.voltage_max == null ? "—" : `${formatNumber(battery.voltage_max, 3)} V`;
+  byId("monitorCurrent").textContent = battery.current_now == null ? "—" : `${formatNumber(battery.current_now, 0)} mA`;
+  byId("monitorPower").textContent = battery.power_now == null ? "—" : `${formatNumber(battery.power_now, 2)} W`;
+  byId("monitorTemperature").textContent = battery.temperature == null ? "—" : `${formatNumber(battery.temperature, 1)} °C`;
 }
 
 function renderSources(sources) {
-  const list = $("sourceList");
+  const list = byId("sourceList");
   list.replaceChildren();
-  const online = sources.filter((s) => s.online === true);
-  if (online.length === 0) {
+  const onlineSources = sources.filter((source) => source.online === true);
+  if (onlineSources.length === 0) {
     const hint = document.createElement("p");
     hint.className = "empty-hint";
-    hint.textContent = t("source.empty.battery");
+    hint.textContent = translate("source.empty.battery");
     list.appendChild(hint);
     return;
   }
-  online.forEach((s) => {
-    const icon = s.kind === "Wireless" ? "📡" : s.kind === "Mains" ? "⚡" : "🔌";
-    const detail = `${fmt(s.voltage_now, 2)} V · ${fmt(s.current_now, 0)} mA${
-      s.usb_type ? " · " + s.usb_type : ""
+  onlineSources.forEach((source) => {
+    const icon = source.kind === "Wireless" ? "📡" : source.kind === "Mains" ? "⚡" : "🔌";
+    const detail = `${formatNumber(source.power_now, 2)} W · ${formatNumber(source.voltage_now, 2)} V · ${formatNumber(source.current_now, 0)} mA${
+      source.usb_type ? " · " + source.usb_type : ""
     }`;
 
     const item = document.createElement("div");
@@ -515,7 +583,7 @@ function renderSources(sources) {
     body.className = "src-body";
     const name = document.createElement("div");
     name.className = "src-name";
-    name.textContent = sourceLabel(s.kind);
+    name.textContent = sourceLabel(source.kind);
     const detailEl = document.createElement("div");
     detailEl.className = "src-detail";
     detailEl.textContent = detail;
@@ -523,23 +591,97 @@ function renderSources(sources) {
 
     const state = document.createElement("div");
     state.className = "src-state on";
-    state.textContent = t("source.online");
+    state.textContent = translate("source.online");
 
     item.append(iconEl, body, state);
     list.appendChild(item);
   });
 }
 
+function formatEnergy(wh) {
+  if (wh == null || isNaN(wh)) return "—";
+  return wh >= 1 ? `${formatNumber(wh, 2)} Wh` : `${formatNumber(wh * 1000, 1)} mWh`;
+}
+
+function appPowerSubtitle(app) {
+  return app.process_count > 1 ? translate("appPower.processCount", { count: app.process_count }) : "";
+}
+
+function renderAppPowerRows(listId, apps, metric, valueLabel, maxValue) {
+  const list = byId(listId);
+  list.replaceChildren();
+  if (!apps || apps.length === 0) {
+    const hint = document.createElement("p");
+    hint.className = "empty-hint";
+    hint.textContent = translate("appPower.empty");
+    list.appendChild(hint);
+    return;
+  }
+  const scale = Math.max(maxValue, 0.0001);
+  apps.forEach((app) => {
+    const item = document.createElement("div");
+    item.className = "app-power-item";
+
+    const body = document.createElement("div");
+    body.className = "app-power-body";
+    const name = document.createElement("div");
+    name.className = "app-power-name";
+    name.textContent = app.name || "—";
+    name.title = app.name || "";
+    const sub = document.createElement("div");
+    sub.className = "app-power-sub";
+    sub.textContent = appPowerSubtitle(app);
+    const bar = document.createElement("div");
+    bar.className = "app-power-bar";
+    const barFill = document.createElement("div");
+    barFill.className = "app-power-bar-fill";
+    barFill.style.width = `${Math.min(100, (app[metric] / scale) * 100)}%`;
+    bar.appendChild(barFill);
+    body.append(name);
+    if (sub.textContent) body.appendChild(sub);
+    body.appendChild(bar);
+
+    const value = document.createElement("div");
+    value.className = "app-power-value";
+    value.textContent = valueLabel(app);
+
+    item.append(body, value);
+    list.appendChild(item);
+  });
+}
+
+function renderAppPowerReport(report) {
+  const totalEnergy = report?.total_energy ?? [];
+  const currentPower = report?.current_power ?? [];
+  const maxEnergy = Math.max(...totalEnergy.map((app) => app.energy_wh), 0.0001);
+  const maxPower = Math.max(...currentPower.map((app) => app.power_w), 0.0001);
+  renderAppPowerRows("appEnergyList", totalEnergy, "energy_wh", (app) => formatEnergy(app.energy_wh), maxEnergy);
+  renderAppPowerRows("appPowerList", currentPower, "power_w", (app) => `${formatNumber(app.power_w, 2)} W`, maxPower);
+}
+
 // ---------- 监测曲线（实时滚动 + 多档分时）----------
-const METRICS = {
-  cap:  { nameKey: "metric.cap", unit: "%",  decimals: 0, signed: false, clamp: [0, 100] },
-  pow:  { nameKey: "metric.pow", unit: "W",  decimals: 2, signed: true },
-  temp: { nameKey: "metric.temp", unit: "°C", decimals: 1, signed: false },
-  volt: { nameKey: "metric.volt", unit: "V",  decimals: 3, signed: false },
-  curr: { nameKey: "metric.curr", unit: "mA", decimals: 0, signed: true },
+const metricConfigs = {
+  battery: {
+    capacity: { nameKey: "metric.battery.capacity", unit: "%", decimals: 0, signed: false, clamp: [0, 100] },
+    power_w: { nameKey: "metric.battery.power", unit: "W", decimals: 2, signed: true },
+    temperature: { nameKey: "metric.battery.temperature", unit: "°C", decimals: 1, signed: false },
+    voltage: { nameKey: "metric.battery.voltage", unit: "V", decimals: 3, signed: false },
+    current_ma: { nameKey: "metric.battery.current", unit: "mA", decimals: 0, signed: true },
+  },
+  input: {
+    energy_wh: { nameKey: "metric.input.energy", unit: "Wh", decimals: 3, signed: false, formatter: formatEnergy },
+    power_w: { nameKey: "metric.input.power", unit: "W", decimals: 2, signed: false },
+    temperature: { nameKey: "metric.input.temperature", unit: "", decimals: 1, signed: false, disabled: true },
+    voltage: { nameKey: "metric.input.voltage", unit: "V", decimals: 3, signed: false },
+    current_ma: { nameKey: "metric.input.current", unit: "mA", decimals: 0, signed: false },
+  },
+};
+const metricOrder = {
+  battery: ["capacity", "power_w", "temperature", "voltage", "current_ma"],
+  input: ["energy_wh", "power_w", "temperature", "voltage", "current_ma"],
 };
 
-const MONITOR = { metric: "cap", rangeMs: 300000 };
+const monitorState = { sourceKind: "battery", metric: "capacity", rangeMs: 300000, inputSourceId: "total" };
 // 仅 5 分档从前端实时缓冲区绘制(2 秒一帧平滑滚动)；≥30 分一律查后端 RRD 归档
 // (30s/5min 粒度足够，且能显示打开软件之前的历史)。
 const LIVE_MAX_MS = 300000;   // ≤ 此范围用实时缓冲
@@ -547,212 +689,475 @@ const BUFFER_MAX_MS = 600000; // 缓冲保留 10 分钟，为 5 分窗口留 2×
 const HISTORY_FINE_STEP_MS = 30_000;
 const HISTORY_COARSE_STEP_MS = 300_000;
 const HISTORY_MAX_POINTS = 240;
-const rtBuffer = [];
+const batteryRtBuffer = [];
+const inputRtBuffers = new Map();
+const knownInputSources = new Map();
 let lastSamples = [];
 
-const isMonitorActive = () => $("monitor").classList.contains("active");
+const isMonitorActive = () => byId("monitor").classList.contains("active");
 
 // 把一帧快照转成与后端 Sample 一致的样本（功率带符号：放电为负）。
-function pushBuffer(b, tMs) {
-  const chg = b.status === "Charging";
-  const mag = b.power_now == null ? null : Math.abs(b.power_now);
-  rtBuffer.push({
-    t: tMs,
-    cap: b.capacity ?? null,
-    temp: b.temperature ?? null,
-    pow: mag == null ? null : chg ? mag : -mag,
-    volt: b.voltage_now ?? null,
-    curr: b.current_now ?? null,
-    chg,
+function pushBatteryBuffer(battery, timestampMs) {
+  const isCharging = battery.status === "Charging";
+  const powerMagnitude = battery.power_now == null ? null : Math.abs(battery.power_now);
+  batteryRtBuffer.push({
+    timestamp_ms: timestampMs,
+    capacity: battery.capacity ?? null,
+    temperature: battery.temperature ?? null,
+    power_w: powerMagnitude == null ? null : isCharging ? powerMagnitude : -powerMagnitude,
+    voltage: battery.voltage_now ?? null,
+    current_ma: battery.current_now ?? null,
+    charging: isCharging,
   });
-  const cutoff = tMs - BUFFER_MAX_MS;
-  while (rtBuffer.length && rtBuffer[0].t < cutoff) rtBuffer.shift();
+  const cutoff = timestampMs - BUFFER_MAX_MS;
+  while (batteryRtBuffer.length && batteryRtBuffer[0].timestamp_ms < cutoff) batteryRtBuffer.shift();
+}
+
+function absOrNull(value) {
+  return value == null ? null : Math.abs(Number(value));
+}
+
+function sumPresent(values) {
+  const present = values.filter((value) => value != null && !isNaN(value));
+  return present.length ? present.reduce((sum, value) => sum + value, 0) : null;
+}
+
+function averagePresent(values) {
+  const present = values.filter((value) => value != null && !isNaN(value));
+  return present.length ? present.reduce((sum, value) => sum + value, 0) / present.length : null;
+}
+
+function inputSample(source, timestampMs) {
+  return {
+    timestamp_ms: timestampMs,
+    capacity: null,
+    temperature: null,
+    power_w: absOrNull(source.power_now),
+    voltage: source.voltage_now ?? null,
+    current_ma: absOrNull(source.current_now),
+    charging: true,
+  };
+}
+
+function totalInputSample(sources, timestampMs) {
+  const onlineSources = (sources ?? []).filter((source) => source.online === true);
+  if (!onlineSources.length) return null;
+  return {
+    timestamp_ms: timestampMs,
+    capacity: null,
+    temperature: null,
+    power_w: sumPresent(onlineSources.map((source) => absOrNull(source.power_now))),
+    voltage: averagePresent(onlineSources.map((source) => source.voltage_now ?? null)),
+    current_ma: sumPresent(onlineSources.map((source) => absOrNull(source.current_now))),
+    charging: true,
+  };
+}
+
+function pushLimitedBuffer(buffer, sample, timestampMs) {
+  buffer.push(sample);
+  const cutoff = timestampMs - BUFFER_MAX_MS;
+  while (buffer.length && buffer[0].timestamp_ms < cutoff) buffer.shift();
+}
+
+function inputBuffer(sourceId) {
+  const key = sourceId || "total";
+  if (!inputRtBuffers.has(key)) inputRtBuffers.set(key, []);
+  return inputRtBuffers.get(key);
+}
+
+function rememberInputSources(sources) {
+  (sources ?? []).forEach((source) => {
+    if (source?.name) knownInputSources.set(source.name, source);
+  });
+}
+
+function pushInputBuffers(sources, timestampMs) {
+  rememberInputSources(sources);
+  const totalSample = totalInputSample(sources, timestampMs);
+  if (totalSample) pushLimitedBuffer(inputBuffer("total"), totalSample, timestampMs);
+
+  (sources ?? [])
+    .filter((source) => source.online === true)
+    .forEach((source) => {
+      pushLimitedBuffer(inputBuffer(source.name), inputSample(source, timestampMs), timestampMs);
+    });
 }
 
 // 启动时用后端 RRD 归档预填实时缓冲区，使 5 分档一打开就能显示打开软件之前的数据。
 // 后端为 30s 粒度的历史，随后由实时 tick 追加 2s 粒度的新点；二者按时间天然衔接。
-async function seedBuffer() {
+async function seedBuffer(sourceKind = "battery", inputSourceId = "total") {
   try {
-    const hist = await invoke("get_history", { rangeMs: BUFFER_MAX_MS });
+    const args = { rangeMs: BUFFER_MAX_MS, sourceKind };
+    if (sourceKind === "input") args.inputSourceId = inputSourceId;
+    const hist = await invoke("get_history", args);
     if (Array.isArray(hist) && hist.length) {
       // 仅插入早于当前缓冲最早点的历史，避免与已采集的实时点重叠/乱序。
-      const earliest = rtBuffer.length ? rtBuffer[0].t : Infinity;
-      const older = hist.filter((s) => s.t < earliest);
-      if (older.length) rtBuffer.unshift(...older);
+      const buffer = sourceKind === "input" ? inputBuffer(inputSourceId) : batteryRtBuffer;
+      const earliest = buffer.length ? buffer[0].timestamp_ms : Infinity;
+      const older = hist.filter((sample) => sample.timestamp_ms < earliest);
+      if (older.length) buffer.unshift(...older);
     }
   } catch (err) {
     console.error("预填历史失败:", err);
   }
 }
 
-function fmtAxisTime(ms, rangeMs) {
-  const d = new Date(ms);
-  const p = (n) => String(n).padStart(2, "0");
-  if (rangeMs >= 604800000) return `${d.getMonth() + 1}/${d.getDate()}`;
-  if (rangeMs >= 86400000) return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}h`;
-  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+function formatAxisTime(ms, rangeMs) {
+  const date = new Date(ms);
+  const pad2 = (value) => String(value).padStart(2, "0");
+  if (rangeMs >= 604800000) return `${date.getMonth() + 1}/${date.getDate()}`;
+  if (rangeMs >= 86400000) return `${date.getMonth() + 1}/${date.getDate()} ${pad2(date.getHours())}h`;
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function currentMetricConfig() {
+  return metricConfigs[monitorState.sourceKind][monitorState.metric];
+}
+
+function normalizeMetricForSourceKind(sourceKind, metric) {
+  if (sourceKind === "input") {
+    if (metric === "capacity") return "energy_wh";
+    if (metric === "temperature") return "power_w";
+    const config = metricConfigs.input[metric];
+    return config && !config.disabled ? metric : "power_w";
+  }
+  if (metric === "energy_wh") return "capacity";
+  return metricConfigs.battery[metric] ? metric : "capacity";
+}
+
+function renderChartSourceChips() {
+  document.querySelectorAll("#chartSourceChips [data-source-kind]").forEach((btn) => {
+    const sourceKind = btn.dataset.sourceKind;
+    btn.textContent = translate(`chart.source.${sourceKind}`);
+    btn.classList.toggle("active", sourceKind === monitorState.sourceKind);
+  });
+}
+
+function metricLabel(config) {
+  return translate(config.nameKey);
+}
+
+function metricButtonText(config) {
+  const suffix = config.disabled ? translate("metric.unsupported") : config.unit;
+  return [metricLabel(config), suffix].filter(Boolean).join(" ");
+}
+
+function renderMetricChips() {
+  const row = byId("metricChips");
+  row.replaceChildren();
+  for (const metric of metricOrder[monitorState.sourceKind]) {
+    const config = metricConfigs[monitorState.sourceKind][metric];
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.dataset.metric = metric;
+    btn.textContent = metricButtonText(config);
+    btn.disabled = !!config.disabled;
+    btn.classList.toggle("active", metric === monitorState.metric);
+    row.appendChild(btn);
+  }
+}
+
+function inputSourceLabel(source) {
+  return `${sourceLabel(source.kind)} · ${source.name}`;
+}
+
+function renderInputSourceOptions() {
+  const picker = byId("inputSourcePicker");
+  const select = byId("inputSourceSelect");
+  picker.hidden = monitorState.sourceKind !== "input";
+  select.replaceChildren();
+
+  const total = document.createElement("option");
+  total.value = "total";
+  total.textContent = translate("chart.input.total");
+  select.appendChild(total);
+
+  [...knownInputSources.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((source) => {
+      const option = document.createElement("option");
+      option.value = source.name;
+      option.textContent = inputSourceLabel(source);
+      select.appendChild(option);
+    });
+
+  const hasSelected = [...select.options].some((option) => option.value === monitorState.inputSourceId);
+  if (!hasSelected) monitorState.inputSourceId = "total";
+  select.value = monitorState.inputSourceId;
+}
+
+function renderChartLegend() {
+  byId("chartBandLabel").textContent = translate(
+    monitorState.sourceKind === "input" ? "chart.onlinePeriod" : "chart.chargingPeriod"
+  );
+  byId("chartMetricName").textContent = metricLabel(currentMetricConfig());
+}
+
+function selectedLiveBuffer() {
+  return monitorState.sourceKind === "input"
+    ? inputBuffer(monitorState.inputSourceId)
+    : batteryRtBuffer;
+}
+
+function historyArgs(rangeMs) {
+  const args = { rangeMs, sourceKind: monitorState.sourceKind };
+  if (monitorState.sourceKind === "input") args.inputSourceId = monitorState.inputSourceId;
+  return args;
+}
+
+function continuityGapThreshold() {
+  const sourceStep = monitorState.rangeMs > 86400000 ? HISTORY_COARSE_STEP_MS : HISTORY_FINE_STEP_MS;
+  const effectiveStep = Math.max(sourceStep, monitorState.rangeMs / HISTORY_MAX_POINTS);
+  return effectiveStep * 2.5;
+}
+
+function withInputEnergy(samples) {
+  if (monitorState.sourceKind !== "input") return samples;
+  const gapThreshold = continuityGapThreshold();
+  let energyWh = 0;
+  let hasEnergy = false;
+  return samples.map((sample, index) => {
+    const next = { ...sample };
+    if (index === 0) {
+      hasEnergy = sample.power_w != null;
+      next.energy_wh = hasEnergy ? 0 : null;
+      return next;
+    }
+
+    const prev = samples[index - 1];
+    const elapsedMs = sample.timestamp_ms - prev.timestamp_ms;
+    if (
+      elapsedMs > 0 &&
+      elapsedMs <= gapThreshold &&
+      prev.power_w != null &&
+      sample.power_w != null
+    ) {
+      energyWh += ((Math.abs(prev.power_w) + Math.abs(sample.power_w)) / 2) * (elapsedMs / 3_600_000);
+      hasEnergy = true;
+    } else if (sample.power_w != null) {
+      hasEnergy = true;
+    }
+    next.energy_wh = hasEnergy ? energyWh : null;
+    return next;
+  });
+}
+
+function formatMetricValue(value, config) {
+  return config.formatter ? config.formatter(value) : `${formatNumber(value, config.decimals)} ${config.unit}`;
 }
 
 async function refreshChart() {
-  const r = MONITOR.rangeMs;
+  const rangeMs = monitorState.rangeMs;
   let samples;
-  if (r <= LIVE_MAX_MS) {
-    const cutoff = Date.now() - r;
-    samples = rtBuffer.filter((s) => s.t >= cutoff);
+  if (rangeMs <= LIVE_MAX_MS) {
+    const cutoff = Date.now() - rangeMs;
+    samples = selectedLiveBuffer().filter((sample) => sample.timestamp_ms >= cutoff);
   } else {
     try {
-      samples = await invoke("get_history", { rangeMs: r });
+      samples = await invoke("get_history", historyArgs(rangeMs));
     } catch (err) {
       console.error(err);
       return;
     }
   }
-  renderChart(samples);
+  renderChart(withInputEnergy(samples));
 }
 
 function renderChart(samples) {
-  const m = METRICS[MONITOR.metric];
-  $("chartMetricName").textContent = t(m.nameKey);
-  const vals = samples.map((s) => s[MONITOR.metric]).filter((v) => v != null);
+  const metricConfig = currentMetricConfig();
+  renderChartLegend();
+  const values = samples.map((sample) => sample[monitorState.metric]).filter((value) => value != null);
 
-  if (samples.length < 2 || vals.length === 0) {
-    $("chartSvg").innerHTML = "";
-    $("chartEmpty").style.display = "block";
-    ["sCur", "sMin", "sMax", "sAvg"].forEach((id) => ($(id).textContent = "—"));
+  if (samples.length < 2 || values.length === 0) {
+    byId("chartSvg").innerHTML = "";
+    byId("chartEmpty").textContent = translate(
+      monitorState.sourceKind === "input" ? "chart.empty.input" : "chart.empty.battery"
+    );
+    byId("chartEmpty").style.display = "block";
+    ["chartCurrent", "chartMinimum", "chartMaximum", "chartAverage"].forEach((id) => (byId(id).textContent = "—"));
     lastSamples = [];
     return;
   }
-  $("chartEmpty").style.display = "none";
+  byId("chartEmpty").style.display = "none";
   lastSamples = samples;
-  drawChart(samples, MONITOR.metric);
+  drawChart(samples, monitorState.metric);
 
-  const f = (v) => `${fmt(v, m.decimals)} ${m.unit}`;
-  $("sCur").textContent = f(vals[vals.length - 1]);
-  $("sMin").textContent = f(Math.min(...vals));
-  $("sMax").textContent = f(Math.max(...vals));
-  $("sAvg").textContent = f(vals.reduce((a, b) => a + b, 0) / vals.length);
+  byId("chartCurrent").textContent = formatMetricValue(values[values.length - 1], metricConfig);
+  byId("chartMinimum").textContent = formatMetricValue(Math.min(...values), metricConfig);
+  byId("chartMaximum").textContent = formatMetricValue(Math.max(...values), metricConfig);
+  byId("chartAverage").textContent = formatMetricValue(
+    values.reduce((sum, value) => sum + value, 0) / values.length,
+    metricConfig
+  );
 }
 
 function drawChart(samples, metric) {
-  const m = METRICS[metric];
-  const svg = $("chartSvg");
-  const W = svg.clientWidth || 600;
-  const H = svg.clientHeight || 240;
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const metricConfig = currentMetricConfig();
+  const svg = byId("chartSvg");
+  const width = svg.clientWidth || 600;
+  const height = svg.clientHeight || 240;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-  const padL = 46, padR = 14, padT = 14, padB = 24;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
+  const paddingLeft = 46;
+  const paddingRight = 14;
+  const paddingTop = 14;
+  const paddingBottom = 24;
+  const plotWidth = width - paddingLeft - paddingRight;
+  const plotHeight = height - paddingTop - paddingBottom;
 
-  const ts = samples.map((s) => s.t);
+  const timestamps = samples.map((sample) => sample.timestamp_ms);
   // 时间轴：右边缘钉在"现在"，窗口宽度固定为所选档位，曲线随时间往左滚动。
-  const tMax = Date.now();
-  const tMin = tMax - MONITOR.rangeMs;
-  const tSpan = Math.max(1, tMax - tMin);
-  const vals = samples.map((s) => s[metric]);
-  const present = vals.filter((v) => v != null);
+  const timeMax = Date.now();
+  const timeMin = timeMax - monitorState.rangeMs;
+  const timeSpan = Math.max(1, timeMax - timeMin);
+  const values = samples.map((s) => s[metric]);
+  const presentValues = values.filter((value) => value != null);
 
-  let yMin = Math.min(...present), yMax = Math.max(...present);
-  if (m.signed) { yMin = Math.min(yMin, 0); yMax = Math.max(yMax, 0); }
-  if (yMin === yMax) { yMin -= 1; yMax += 1; }
-  const padY = (yMax - yMin) * 0.1;
-  yMin -= padY; yMax += padY;
-  if (m.clamp) { yMin = Math.max(m.clamp[0], yMin); yMax = Math.min(m.clamp[1], yMax); }
+  let valueMin = Math.min(...presentValues);
+  let valueMax = Math.max(...presentValues);
+  if (metricConfig.signed) {
+    valueMin = Math.min(valueMin, 0);
+    valueMax = Math.max(valueMax, 0);
+  }
+  if (valueMin === valueMax) {
+    valueMin -= 1;
+    valueMax += 1;
+  }
+  const valuePadding = (valueMax - valueMin) * 0.1;
+  valueMin -= valuePadding;
+  valueMax += valuePadding;
+  if (metricConfig.clamp) {
+    valueMin = Math.max(metricConfig.clamp[0], valueMin);
+    valueMax = Math.min(metricConfig.clamp[1], valueMax);
+  }
 
-  const X = (t) => padL + ((t - tMin) / tSpan) * plotW;
-  const Y = (v) => padT + ((yMax - v) / (yMax - yMin)) * plotH;
+  const xForTime = (time) => paddingLeft + ((time - timeMin) / timeSpan) * plotWidth;
+  const yForValue = (value) => paddingTop + ((valueMax - value) / (valueMax - valueMin)) * plotHeight;
   const gapThreshold = continuityGapThreshold();
 
   // 充电时段背景带
-  let bands = "";
+  let chargingBands = "";
   for (let i = 0; i < samples.length - 1; i++) {
-    if (samples[i].chg && ts[i + 1] - ts[i] <= gapThreshold) {
-      const x0 = X(ts[i]), x1 = X(ts[i + 1]);
-      bands += `<rect x="${x0.toFixed(1)}" y="${padT}" width="${Math.max(0.5, x1 - x0).toFixed(1)}" height="${plotH}" class="chg-band"/>`;
+    if (samples[i].charging && timestamps[i + 1] - timestamps[i] <= gapThreshold) {
+      const startX = xForTime(timestamps[i]);
+      const endX = xForTime(timestamps[i + 1]);
+      chargingBands += `<rect x="${startX.toFixed(1)}" y="${paddingTop}" width="${Math.max(0.5, endX - startX).toFixed(1)}" height="${plotHeight}" class="chg-band"/>`;
     }
   }
 
   // 网格线 + Y 轴标签
-  let grid = "";
-  for (const lv of [yMax, (yMax + yMin) / 2, yMin]) {
-    const y = Y(lv);
-    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" class="grid-line"/>`;
-    grid += `<text x="${padL - 6}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" class="axis-label">${fmt(lv, m.decimals)}</text>`;
+  let gridLines = "";
+  for (const level of [valueMax, (valueMax + valueMin) / 2, valueMin]) {
+    const y = yForValue(level);
+    gridLines += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${width - paddingRight}" y2="${y.toFixed(1)}" class="grid-line"/>`;
+    gridLines += `<text x="${paddingLeft - 6}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" class="axis-label">${formatNumber(level, metricConfig.decimals)}</text>`;
   }
 
   // 0 基线（带符号指标）
-  let zero = "";
-  if (m.signed && yMin < 0 && yMax > 0) {
-    const y0 = Y(0).toFixed(1);
-    zero = `<line x1="${padL}" y1="${y0}" x2="${W - padR}" y2="${y0}" class="zero-line"/>`;
+  let zeroLine = "";
+  if (metricConfig.signed && valueMin < 0 && valueMax > 0) {
+    const zeroY = yForValue(0).toFixed(1);
+    zeroLine = `<line x1="${paddingLeft}" y1="${zeroY}" x2="${width - paddingRight}" y2="${zeroY}" class="zero-line"/>`;
   }
 
   // 连续段（遇 null 断开）
-  const segs = [];
-  let seg = [];
+  const segments = [];
+  let segment = [];
   for (let i = 0; i < samples.length; i++) {
-    const disconnected = i > 0 && ts[i] - ts[i - 1] > gapThreshold;
-    if (vals[i] == null || disconnected) {
-      if (seg.length) { segs.push(seg); seg = []; }
-      if (vals[i] == null) continue;
+    const disconnected = i > 0 && timestamps[i] - timestamps[i - 1] > gapThreshold;
+    if (values[i] == null || disconnected) {
+      if (segment.length) {
+        segments.push(segment);
+        segment = [];
+      }
+      if (values[i] == null) continue;
     }
-    seg.push([X(ts[i]), Y(vals[i])]);
+    segment.push([xForTime(timestamps[i]), yForValue(values[i])]);
   }
-  if (seg.length) segs.push(seg);
+  if (segment.length) segments.push(segment);
 
-  const baseY = m.signed && yMin < 0 && yMax > 0 ? Y(0) : padT + plotH;
-  const pt = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
-  const line = segs.map((s) => "M" + s.map(pt).join(" L")).join(" ");
-  const area = segs
-    .map((s) => `M${s[0][0].toFixed(1)} ${baseY.toFixed(1)} L${s.map(pt).join(" L")} L${s[s.length - 1][0].toFixed(1)} ${baseY.toFixed(1)} Z`)
+  const baseY = metricConfig.signed && valueMin < 0 && valueMax > 0 ? yForValue(0) : paddingTop + plotHeight;
+  const pointPath = (point) => `${point[0].toFixed(1)} ${point[1].toFixed(1)}`;
+  const linePath = segments.map((points) => "M" + points.map(pointPath).join(" L")).join(" ");
+  const areaPath = segments
+    .map((points) => `M${points[0][0].toFixed(1)} ${baseY.toFixed(1)} L${points.map(pointPath).join(" L")} L${points[points.length - 1][0].toFixed(1)} ${baseY.toFixed(1)} Z`)
     .join(" ");
 
   // X 轴时间标签
-  let xlabels = "";
+  let xAxisLabels = "";
   for (let i = 0; i <= 4; i++) {
-    const t = tMin + (tSpan * i) / 4;
+    const labelTime = timeMin + (timeSpan * i) / 4;
     const anchor = i === 0 ? "start" : i === 4 ? "end" : "middle";
-    xlabels += `<text x="${X(t).toFixed(1)}" y="${H - 7}" text-anchor="${anchor}" class="axis-label">${fmtAxisTime(t, MONITOR.rangeMs)}</text>`;
+    xAxisLabels += `<text x="${xForTime(labelTime).toFixed(1)}" y="${height - 7}" text-anchor="${anchor}" class="axis-label">${formatAxisTime(labelTime, monitorState.rangeMs)}</text>`;
   }
 
-  const defs = `<defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+  const defs = `<defs><linearGradient id="area-gradient" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.28"/>
     <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02"/>
   </linearGradient></defs>`;
 
   svg.innerHTML =
-    defs + bands + grid + zero +
-    `<path d="${area}" class="chart-area-fill"/>` +
-    `<path d="${line}" class="chart-line"/>` +
-    xlabels;
+    defs + chargingBands + gridLines + zeroLine +
+    `<path d="${areaPath}" class="chart-area-fill"/>` +
+    `<path d="${linePath}" class="chart-line"/>` +
+    xAxisLabels;
 }
 
-function continuityGapThreshold() {
-  const sourceStep = MONITOR.rangeMs > 86400000 ? HISTORY_COARSE_STEP_MS : HISTORY_FINE_STEP_MS;
-  const effectiveStep = Math.max(sourceStep, MONITOR.rangeMs / HISTORY_MAX_POINTS);
-  return effectiveStep * 2.5;
-}
+byId("chartSourceChips").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-source-kind]");
+  if (!btn) return;
+  monitorState.sourceKind = btn.dataset.sourceKind;
+  monitorState.metric = normalizeMetricForSourceKind(monitorState.sourceKind, monitorState.metric);
+  renderChartSourceChips();
+  renderMetricChips();
+  renderInputSourceOptions();
+  renderChartLegend();
+  refreshChart();
+  if (monitorState.sourceKind === "input") {
+    seedBuffer("input", monitorState.inputSourceId).then(refreshChart);
+  }
+});
 
-// 指标 / 范围 chip 切换
-function wireChips(rowId, key, parse) {
-  $(rowId).addEventListener("click", (e) => {
-    const btn = e.target.closest(".chip");
-    if (!btn) return;
-    [...$(rowId).children].forEach((c) => c.classList.remove("active"));
-    btn.classList.add("active");
-    MONITOR[key] = parse(btn.dataset[key === "metric" ? "metric" : "range"]);
-    refreshChart();
-  });
-}
-wireChips("metricChips", "metric", (v) => v);
-wireChips("rangeChips", "rangeMs", (v) => parseInt(v, 10));
+byId("metricChips").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-metric]");
+  if (!btn || btn.disabled) return;
+  monitorState.metric = btn.dataset.metric;
+  renderMetricChips();
+  renderChartLegend();
+  refreshChart();
+});
+
+byId("rangeChips").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-range]");
+  if (!btn) return;
+  [...byId("rangeChips").children].forEach((child) => child.classList.remove("active"));
+  btn.classList.add("active");
+  monitorState.rangeMs = parseInt(btn.dataset.range, 10);
+  refreshChart();
+});
+
+byId("inputSourceSelect").addEventListener("change", (event) => {
+  monitorState.inputSourceId = event.target.value || "total";
+  seedBuffer("input", monitorState.inputSourceId).then(refreshChart);
+});
+
+renderChartSourceChips();
+renderMetricChips();
+renderInputSourceOptions();
+renderChartLegend();
 
 // 切到监测标签时立即刷新；窗口缩放时重绘
 document.querySelectorAll(".tab").forEach((tab) => {
-  if (tab.dataset.tab === "monitor") tab.addEventListener("click", refreshChart);
+  if (tab.dataset.tab === "monitor") {
+    tab.addEventListener("click", () => {
+      refreshChart();
+      tickAppPowerReport();
+    });
+  }
 });
 window.addEventListener("resize", () => {
-  if (isMonitorActive() && lastSamples.length) drawChart(lastSamples, MONITOR.metric);
+  if (isMonitorActive() && lastSamples.length) drawChart(lastSamples, monitorState.metric);
 });
 
 // ---------- 轮询 ----------
@@ -760,15 +1165,17 @@ async function tick() {
   try {
     const snap = await invoke("get_snapshot");
     lastSnapshot = snap;
+    if (snap.battery) pushBatteryBuffer(snap.battery, snap.timestamp_ms);
+    pushInputBuffers(snap.sources, snap.timestamp_ms);
     renderBattery(snap.battery);
     renderSources(snap.sources);
-    if (snap.battery) pushBuffer(snap.battery, snap.timestamp_ms);
+    renderInputSourceOptions();
     // 监测页可见时跟随主轮询实时刷新曲线（短档平滑滚动，长档查后端历史）。
     if (isMonitorActive()) refreshChart();
-    const d = new Date(snap.timestamp_ms);
-    $("lastUpdate").textContent = t("footer.updated", { time: d.toLocaleTimeString(currentLanguage) });
+    const date = new Date(snap.timestamp_ms);
+    byId("lastUpdate").textContent = translate("footer.updated", { time: date.toLocaleTimeString(currentLanguage) });
   } catch (err) {
-    $("statusText").textContent = t("status.readFailed");
+    byId("statusText").textContent = translate("status.readFailed");
     console.error(err);
   }
 }
@@ -776,10 +1183,33 @@ async function tick() {
 tick();
 setInterval(tick, 2000);
 
+// 按应用耗电估算依赖后台线程按 SAMPLE_INTERVAL(30s) 采样的 CPU 时间差，
+// 轮询过密没有意义；只在监测页可见时按较长间隔查询。
+async function tickAppPowerReport() {
+  if (!isMonitorActive()) return;
+  try {
+    const report = await invoke("get_app_power_report");
+    renderAppPowerReport(report);
+  } catch (err) {
+    console.error(err);
+  }
+}
+tickAppPowerReport();
+setInterval(tickAppPowerReport, 8000);
+
 // 预填历史缓冲，完成后若监测页可见则立即重绘短档曲线。
-seedBuffer().then(() => {
+Promise.all([seedBuffer("battery"), seedBuffer("input", "total")]).then(() => {
   if (isMonitorActive()) refreshChart();
 });
+
+async function loadAppVersion() {
+  try {
+    byId("aboutVersion").textContent = await invoke("get_app_version");
+  } catch (err) {
+    console.error("读取版本号失败:", err);
+  }
+}
+loadAppVersion();
 
 // ---------- 设置 ----------
 let settings = {
@@ -796,21 +1226,21 @@ let settings = {
 };
 const closeActionLabel = (value) =>
   ({
-    ask: t("close.ask"),
-    tray: t("close.tray"),
-    exit: t("close.exit"),
+    ask: translate("close.ask"),
+    tray: translate("close.tray"),
+    exit: translate("close.exit"),
   }[value]);
 
 function setCloseActionDropdownOpen(open) {
-  $("closeActionDropdown").classList.toggle("open", open);
-  $("setCloseActionButton").setAttribute("aria-expanded", String(open));
+  byId("closeActionDropdown").classList.toggle("open", open);
+  byId("setCloseActionButton").setAttribute("aria-expanded", String(open));
 }
 
 function setCloseActionValue(value, shouldPersist = false) {
   const next = closeActionLabel(value) ? value : "ask";
   settings.close_action = next;
-  $("setCloseAction").value = next;
-  $("setCloseActionLabel").textContent = closeActionLabel(next);
+  byId("setCloseAction").value = next;
+  byId("setCloseActionLabel").textContent = closeActionLabel(next);
   document.querySelectorAll("#setCloseActionMenu [data-value]").forEach((item) => {
     item.setAttribute("aria-selected", String(item.dataset.value === next));
     item.textContent = closeActionLabel(item.dataset.value);
@@ -821,19 +1251,19 @@ function setCloseActionValue(value, shouldPersist = false) {
 async function loadSettings() {
   try {
     settings = await invoke("get_settings");
-    settings.language = I18N[settings.language] ? settings.language : "zh-CN";
+    settings.language = translations[settings.language] ? settings.language : "zh-CN";
     settings.theme = ["system", "light", "dark"].includes(settings.theme) ? settings.theme : "system";
     setSegmentedValue("setLanguage", settings.language);
     setSegmentedValue("setTheme", settings.theme);
     applyTheme(settings.theme);
     applyLanguage(settings.language);
-    $("setAutostart").checked = settings.autostart;
-    $("setSilentStart").checked = settings.silent_start;
+    byId("setAutostart").checked = settings.autostart;
+    byId("setSilentStart").checked = settings.silent_start;
     setCloseActionValue(settings.close_action);
-    $("setRemindCharge").checked = settings.remind_charge;
-    $("setRemindChargeAt").value = settings.remind_charge_at;
-    $("setRemindUnplug").checked = settings.remind_unplug;
-    $("setRemindUnplugAt").value = settings.remind_unplug_at;
+    byId("setRemindCharge").checked = settings.remind_charge;
+    byId("setRemindChargeAt").value = settings.remind_charge_at;
+    byId("setRemindUnplug").checked = settings.remind_unplug;
+    byId("setRemindUnplugAt").value = settings.remind_unplug_at;
     syncReminderInputs();
     refreshSuperPowerSaver();
   } catch (err) {
@@ -841,29 +1271,33 @@ async function loadSettings() {
   }
 }
 
-const freqLabel = (khz) => {
-  if (khz == null || isNaN(khz)) return "—";
-  return khz >= 1000000 ? `${(khz / 1000000).toFixed(2)} GHz` : `${Math.round(khz / 1000)} MHz`;
+const formatKilohertz = (kilohertz) => {
+  if (kilohertz == null || isNaN(kilohertz)) return "—";
+  return kilohertz >= 1000000
+    ? `${(kilohertz / 1000000).toFixed(2)} GHz`
+    : `${Math.round(kilohertz / 1000)} MHz`;
 };
 
-const freqHzLabel = (hz) => {
-  if (hz == null || isNaN(hz)) return "—";
-  return hz >= 1000000000 ? `${(hz / 1000000000).toFixed(2)} GHz` : `${Math.round(hz / 1000000)} MHz`;
+const formatHertz = (hertz) => {
+  if (hertz == null || isNaN(hertz)) return "—";
+  return hertz >= 1000000000
+    ? `${(hertz / 1000000000).toFixed(2)} GHz`
+    : `${Math.round(hertz / 1000000)} MHz`;
 };
 
-const powerCapsLabel = (state) => {
+const frequencyLimitSummary = (state) => {
   const parts = [];
   if (state?.policies?.length) {
-    parts.push(`CPU ${state.policies.map((p) => freqLabel(p.max_freq)).join(" / ")}`);
+    parts.push(`CPU ${state.policies.map((policy) => formatKilohertz(policy.max_freq)).join(" / ")}`);
   }
   if (state?.gpus?.length) {
-    parts.push(`GPU ${state.gpus.map((g) => freqHzLabel(g.max_freq)).join(" / ")}`);
+    parts.push(`GPU ${state.gpus.map((gpu) => formatHertz(gpu.max_freq)).join(" / ")}`);
   }
   return parts.length ? parts.join(" · ") : "—";
 };
 
 function setSuperPowerStatus(text, className = "power-mode-status", action = null) {
-  const status = $("superPowerStatus");
+  const status = byId("superPowerStatus");
   status.className = className;
   status.replaceChildren();
 
@@ -882,59 +1316,59 @@ function setSuperPowerStatus(text, className = "power-mode-status", action = nul
 }
 
 function renderSuperPowerSaver(state, busy = false) {
-  const toggle = $("setSuperPowerSaver");
+  const toggle = byId("setSuperPowerSaver");
   const desired = !!settings.super_power_saver;
   if (busy) {
     toggle.disabled = true;
     toggle.checked = desired;
-    setSuperPowerStatus(t("settings.super.applying"));
+    setSuperPowerStatus(translate("settings.super.applying"));
     return;
   }
   if (!state?.supported) {
     lastCpuPowerState = state;
     toggle.checked = false;
     toggle.disabled = true;
-    setSuperPowerStatus(t("settings.super.unsupported"), "power-mode-status warning");
+    setSuperPowerStatus(translate("settings.super.unsupported"), "power-mode-status warning");
     return;
   }
   toggle.disabled = false;
   toggle.checked = desired;
   lastCpuPowerState = state;
   const actual = !!state.active;
-  const caps = powerCapsLabel(state);
+  const caps = frequencyLimitSummary(state);
 
   if (desired && actual) {
-    setSuperPowerStatus(t("settings.super.active", { caps }), "power-mode-status active");
+    setSuperPowerStatus(translate("settings.super.active", { caps }), "power-mode-status active");
   } else if (desired && !actual) {
     setSuperPowerStatus(
-      t("settings.super.wantOnMismatch", { caps }),
+      translate("settings.super.wantOnMismatch", { caps }),
       "power-mode-status warning",
       {
-        label: t("settings.super.reapply"),
+        label: translate("settings.super.reapply"),
         onClick: () => applySuperPowerSaver(true),
       }
     );
   } else if (!desired && actual) {
     setSuperPowerStatus(
-      t("settings.super.wantOffMismatch", { caps }),
+      translate("settings.super.wantOffMismatch", { caps }),
       "power-mode-status warning",
       {
-        label: t("settings.super.restore"),
+        label: translate("settings.super.restore"),
         onClick: () => applySuperPowerSaver(false),
       }
     );
   } else {
-    setSuperPowerStatus(t("settings.super.inactive", { caps }));
+    setSuperPowerStatus(translate("settings.super.inactive", { caps }));
   }
 }
 
 async function refreshSuperPowerSaver() {
   try {
-    setSuperPowerStatus(t("settings.super.checking"));
+    setSuperPowerStatus(translate("settings.super.checking"));
     const state = await invoke("get_cpu_power_state");
     renderSuperPowerSaver(state);
   } catch (err) {
-    setSuperPowerStatus(t("settings.super.error", { message: String(err) }), "power-mode-status warning");
+    setSuperPowerStatus(translate("settings.super.error", { message: String(err) }), "power-mode-status warning");
   }
 }
 
@@ -948,15 +1382,15 @@ async function applySuperPowerSaver(enabled) {
     persistSettings();
   } catch (err) {
     settings.super_power_saver = previousDesired;
-    setSuperPowerStatus(t("settings.super.error", { message: String(err) }), "power-mode-status warning");
+    setSuperPowerStatus(translate("settings.super.error", { message: String(err) }), "power-mode-status warning");
     await refreshSuperPowerSaver();
   }
 }
 
 // 阈值输入框仅在对应提醒开启时可编辑。
 function syncReminderInputs() {
-  $("setRemindChargeAt").disabled = !settings.remind_charge;
-  $("setRemindUnplugAt").disabled = !settings.remind_unplug;
+  byId("setRemindChargeAt").disabled = !settings.remind_charge;
+  byId("setRemindUnplugAt").disabled = !settings.remind_unplug;
 }
 
 async function persistSettings() {
@@ -967,20 +1401,20 @@ async function persistSettings() {
   }
 }
 
-$("setAutostart").addEventListener("change", (e) => {
+byId("setAutostart").addEventListener("change", (e) => {
   settings.autostart = e.target.checked;
   persistSettings();
 });
-$("setSilentStart").addEventListener("change", (e) => {
+byId("setSilentStart").addEventListener("change", (e) => {
   settings.silent_start = e.target.checked;
   persistSettings();
 });
-$("setSuperPowerSaver").addEventListener("change", async (e) => {
+byId("setSuperPowerSaver").addEventListener("change", async (e) => {
   applySuperPowerSaver(e.target.checked);
 });
 
 function wireSegmentedSetting(groupId, key, apply) {
-  $(groupId).addEventListener("click", (e) => {
+  byId(groupId).addEventListener("click", (e) => {
     const btn = e.target.closest("[data-setting-value]");
     if (!btn) return;
     const value = btn.dataset.settingValue;
@@ -995,61 +1429,61 @@ wireSegmentedSetting("setLanguage", "language", applyLanguage);
 wireSegmentedSetting("setTheme", "theme", applyTheme);
 
 // 阈值输入框失焦时夹取到合法范围并保存。
-function commitThreshold(inputId, key, lo, hi) {
-  const el = $(inputId);
-  let v = parseInt(el.value, 10);
-  if (isNaN(v)) v = settings[key];
-  v = Math.min(hi, Math.max(lo, v));
-  el.value = v;
-  settings[key] = v;
+function commitThreshold(inputId, key, minValue, maxValue) {
+  const input = byId(inputId);
+  let nextValue = parseInt(input.value, 10);
+  if (isNaN(nextValue)) nextValue = settings[key];
+  nextValue = Math.min(maxValue, Math.max(minValue, nextValue));
+  input.value = nextValue;
+  settings[key] = nextValue;
   if (lastSnapshot?.battery) renderPowerPrediction(lastSnapshot.battery);
   persistSettings();
 }
 
-$("setRemindCharge").addEventListener("change", (e) => {
+byId("setRemindCharge").addEventListener("change", (e) => {
   settings.remind_charge = e.target.checked;
   syncReminderInputs();
   persistSettings();
 });
-$("setRemindUnplug").addEventListener("change", (e) => {
+byId("setRemindUnplug").addEventListener("change", (e) => {
   settings.remind_unplug = e.target.checked;
   syncReminderInputs();
   persistSettings();
 });
-$("setRemindChargeAt").addEventListener("change", () =>
+byId("setRemindChargeAt").addEventListener("change", () =>
   commitThreshold("setRemindChargeAt", "remind_charge_at", 1, 99)
 );
-$("setRemindUnplugAt").addEventListener("change", () =>
+byId("setRemindUnplugAt").addEventListener("change", () =>
   commitThreshold("setRemindUnplugAt", "remind_unplug_at", 1, 100)
 );
-$("setCloseActionButton").addEventListener("click", () => {
-  setCloseActionDropdownOpen(!$("closeActionDropdown").classList.contains("open"));
+byId("setCloseActionButton").addEventListener("click", () => {
+  setCloseActionDropdownOpen(!byId("closeActionDropdown").classList.contains("open"));
 });
-$("setCloseActionMenu").addEventListener("click", (e) => {
+byId("setCloseActionMenu").addEventListener("click", (e) => {
   const item = e.target.closest("[data-value]");
   if (!item) return;
   setCloseActionValue(item.dataset.value, true);
   setCloseActionDropdownOpen(false);
 });
 document.addEventListener("click", (e) => {
-  if (!$("closeActionDropdown").contains(e.target)) setCloseActionDropdownOpen(false);
+  if (!byId("closeActionDropdown").contains(e.target)) setCloseActionDropdownOpen(false);
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") setCloseActionDropdownOpen(false);
 });
 
 // ---------- 关闭确认弹框 ----------
-const closeModal = $("closeModal");
+const closeModal = byId("closeModal");
 const showModal = () => closeModal.classList.add("show");
 const hideModal = () => closeModal.classList.remove("show");
 
 // 后端拦截窗口关闭后发来事件 → 弹框询问（仅 close_action=ask 时触发）。
 listen("close-requested", () => showModal());
 
-$("closeCancel").addEventListener("click", hideModal);
+byId("closeCancel").addEventListener("click", hideModal);
 
-$("closeTray").addEventListener("click", () => {
-  if ($("closeRemember").checked) {
+byId("closeTray").addEventListener("click", () => {
+  if (byId("closeRemember").checked) {
     settings.close_action = "tray";
     setCloseActionValue("tray");
     persistSettings();
@@ -1058,8 +1492,8 @@ $("closeTray").addEventListener("click", () => {
   invoke("hide_window");
 });
 
-$("closeQuit").addEventListener("click", () => {
-  if ($("closeRemember").checked) {
+byId("closeQuit").addEventListener("click", () => {
+  if (byId("closeRemember").checked) {
     settings.close_action = "exit";
     setCloseActionValue("exit");
     persistSettings();

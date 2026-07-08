@@ -1,14 +1,19 @@
 {
   "name": "battery-sipjuice",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Battery SipJuice — Linux 电池监控与健康管理工具",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "build:deb": "tauri build --bundles deb",
+    "build:rpm": "tauri build --bundles rpm",
+    "build:linux:packages": "tauri build --bundles deb,rpm",
+    "build:linux:x64": "tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm",
+    "version:bump": "node scripts/bump-version.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

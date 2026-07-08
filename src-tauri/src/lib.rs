@@ -1,5 +1,6 @@
 //! Battery SipJuice — 库入口。
 
+mod app_power;
 mod battery;
 mod commands;
 mod cpu_power;
@@ -48,6 +49,9 @@ pub fn run() {
             let settings_store = settings::SettingsStore::load(cfg_dir.join("settings.json"));
             let current = settings_store.get();
             app.manage(settings_store);
+
+            // 按应用耗电估算：状态只由后台线程写入，命令层只读。
+            app.manage(app_power::AppPowerStore::default());
 
             // 系统托盘 + 右键菜单（显示窗口 / 轻量模式 / 退出）。
             let show_item = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
@@ -134,6 +138,8 @@ pub fn run() {
                     h.state::<history::HistoryStore>().tick();
                     let settings = h.state::<settings::SettingsStore>().get();
                     reminder::evaluate(h, &settings, &mut fired);
+                    let battery_power_w = battery::collect().and_then(|b| b.power_now);
+                    h.state::<app_power::AppPowerStore>().tick(battery_power_w);
                 };
                 snapshot(&handle);
                 loop {
@@ -147,9 +153,11 @@ pub fn run() {
             commands::get_snapshot,
             commands::get_history,
             commands::get_settings,
+            commands::get_app_version,
             commands::save_settings,
             commands::get_cpu_power_state,
             commands::set_super_power_saver,
+            commands::get_app_power_report,
             commands::hide_window,
             commands::quit_app,
         ])

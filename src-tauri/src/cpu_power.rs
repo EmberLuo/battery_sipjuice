@@ -74,7 +74,7 @@ pub fn state() -> CpuPowerState {
     }
 }
 
-pub fn set_super_saver(enabled: bool) -> Result<CpuPowerState, String> {
+pub fn set_super_power_saver(enabled: bool) -> Result<CpuPowerState, String> {
     if collect_policy_dirs().is_empty() && collect_gpu_dirs().is_empty() {
         return Err("未检测到可调节的 CPU/GPU 频率策略".to_string());
     }
