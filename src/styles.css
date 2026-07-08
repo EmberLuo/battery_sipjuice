@@ -1,8 +1,8 @@
 /* Battery SipJuice — Adwaita 风格自适应主题 */
 
 :root {
-  --accent: #3584e4;
-  --accent-strong: #1c71d8;
+  --accent: #ff6900;
+  --accent-strong: #e55e00;
   --good: #2ec27e;
   --warn: #e5a50a;
   --bad: #e01b24;
@@ -532,10 +532,10 @@ body {
 .setting-select:hover,
 .setting-select[aria-expanded="true"] {
   background: var(--bg-elev);
-  border-color: rgba(53, 132, 228, 0.45);
+  border-color: rgba(255, 105, 0, 0.45);
 }
 .setting-select:focus-visible {
-  outline: 2px solid rgba(53, 132, 228, 0.7);
+  outline: 2px solid rgba(255, 105, 0, 0.7);
   outline-offset: 2px;
 }
 .select-caret {
@@ -610,18 +610,18 @@ body {
 }
 .segment-tile:hover {
   background: var(--bg-elev);
-  border-color: rgba(53, 132, 228, 0.45);
+  border-color: rgba(255, 105, 0, 0.45);
 }
 .segment-tile:active { transform: scale(0.99); }
 .segment-tile:focus-visible {
-  outline: 2px solid rgba(53, 132, 228, 0.7);
+  outline: 2px solid rgba(255, 105, 0, 0.7);
   outline-offset: 2px;
 }
 .segment-tile.active,
 .segment-tile[aria-checked="true"] {
-  background: rgba(53, 132, 228, 0.12);
-  border-color: rgba(53, 132, 228, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(53, 132, 228, 0.22);
+  background: rgba(255, 105, 0, 0.12);
+  border-color: rgba(255, 105, 0, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 105, 0, 0.22);
 }
 .segment-title {
   font-size: 13.5px;
