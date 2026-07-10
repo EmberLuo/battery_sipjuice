@@ -6,13 +6,11 @@ const { listen } = window.__TAURI__.event;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52; // 与 styles.css 的 r=52 一致
 let currentLanguage = "zh-CN";
 let lastSnapshot = null;
-let lastCpuPowerState = null;
 
 const translations = {
   "zh-CN": {
     "section.interface": "界面",
     "section.general": "常规",
-    "section.energy": "能耗控制",
     "section.reminders": "电池养护提醒",
     "section.powerSource": "输入电源",
     "section.appPower": "应用耗电估算",
@@ -45,19 +43,6 @@ const translations = {
     "settings.silent.desc": "启动时不显示窗口，仅在系统托盘运行",
     "settings.close.name": "关闭按钮行为",
     "settings.close.desc": "点击窗口关闭按钮(✕)时的动作",
-    "settings.energy.desc": "比系统省电模式更强，直接限制 CPU/GPU 频率上限，适合后台编译、下载、低电量和发热时使用。",
-    "settings.super.name": "超级省电模式",
-    "settings.super.desc": "限制各组 CPU 核心和 GPU 最高频率，降低峰值功耗和发热。",
-    "settings.super.checking": "正在读取 CPU/GPU 频率策略…",
-    "settings.super.applying": "正在请求管理员权限并切换 CPU/GPU 频率上限…",
-    "settings.super.active": "已开启 · {caps}",
-    "settings.super.inactive": "未开启 · 当前上限 {caps}",
-    "settings.super.wantOnMismatch": "你希望开启，但当前未生效 · 当前上限 {caps}",
-    "settings.super.wantOffMismatch": "检测到系统当前仍在限频 · 当前上限 {caps}",
-    "settings.super.reapply": "重新应用",
-    "settings.super.restore": "恢复默认",
-    "settings.super.unsupported": "当前系统没有暴露可调节的 CPU/GPU 频率策略。",
-    "settings.super.error": "切换失败：{message}",
     "settings.reminders.desc": "按电量阈值弹出系统通知，纯软件实现，任何设备都能用，不改变充电行为。",
     "settings.low.name": "低电量提醒",
     "settings.low.desc": "放电时电量低于阈值，提醒接上电源",
@@ -167,7 +152,6 @@ const translations = {
   "en-US": {
     "section.interface": "Interface",
     "section.general": "General",
-    "section.energy": "Power Control",
     "section.reminders": "Battery Care Reminders",
     "section.powerSource": "Power Sources",
     "section.appPower": "Estimated App Power Usage",
@@ -200,19 +184,6 @@ const translations = {
     "settings.silent.desc": "Start hidden and keep running in the tray",
     "settings.close.name": "Close Button",
     "settings.close.desc": "What happens when you click the window close button",
-    "settings.energy.desc": "Stronger than the system power saver. It directly caps CPU/GPU frequency for background compiling, downloads, low battery, and heat.",
-    "settings.super.name": "Super Power Saver",
-    "settings.super.desc": "Caps each CPU cluster and GPU to reduce peak power and heat.",
-    "settings.super.checking": "Reading CPU/GPU frequency policies…",
-    "settings.super.applying": "Requesting administrator permission and changing CPU/GPU limits…",
-    "settings.super.active": "On · {caps}",
-    "settings.super.inactive": "Off · Current caps {caps}",
-    "settings.super.wantOnMismatch": "You want it on, but it is not active · Current caps {caps}",
-    "settings.super.wantOffMismatch": "The system is still frequency-limited · Current caps {caps}",
-    "settings.super.reapply": "Apply Again",
-    "settings.super.restore": "Restore Defaults",
-    "settings.super.unsupported": "This system does not expose adjustable CPU/GPU frequency policies.",
-    "settings.super.error": "Failed to switch: {message}",
     "settings.reminders.desc": "Show system notifications at battery thresholds. Software only, works on any device, and does not change charging behavior.",
     "settings.low.name": "Low Battery Reminder",
     "settings.low.desc": "Notify when discharging below the threshold",
@@ -448,7 +419,6 @@ function applyLanguage(language) {
   renderInputSourceOptions();
   renderChartLegend();
   setCloseActionValue(settings.close_action);
-  if (lastCpuPowerState) renderSuperPowerSaver(lastCpuPowerState);
   if (lastSnapshot) {
     renderBattery(lastSnapshot.battery);
     renderSources(lastSnapshot.sources);
@@ -1308,7 +1278,6 @@ let settings = {
   autostart: false,
   silent_start: false,
   close_action: "ask",
-  super_power_saver: false,
   remind_charge: true,
   remind_charge_at: 30,
   remind_unplug: true,
@@ -1358,125 +1327,8 @@ async function loadSettings() {
     byId("setRemindUnplug").checked = settings.remind_unplug;
     byId("setRemindUnplugAt").value = settings.remind_unplug_at;
     syncReminderInputs();
-    refreshSuperPowerSaver();
   } catch (err) {
     console.error(err);
-  }
-}
-
-const formatKilohertz = (kilohertz) => {
-  if (kilohertz == null || isNaN(kilohertz)) return "—";
-  return kilohertz >= 1000000
-    ? `${(kilohertz / 1000000).toFixed(2)} GHz`
-    : `${Math.round(kilohertz / 1000)} MHz`;
-};
-
-const formatHertz = (hertz) => {
-  if (hertz == null || isNaN(hertz)) return "—";
-  return hertz >= 1000000000
-    ? `${(hertz / 1000000000).toFixed(2)} GHz`
-    : `${Math.round(hertz / 1000000)} MHz`;
-};
-
-const frequencyLimitSummary = (state) => {
-  const parts = [];
-  if (state?.policies?.length) {
-    parts.push(`CPU ${state.policies.map((policy) => formatKilohertz(policy.max_freq)).join(" / ")}`);
-  }
-  if (state?.gpus?.length) {
-    parts.push(`GPU ${state.gpus.map((gpu) => formatHertz(gpu.max_freq)).join(" / ")}`);
-  }
-  return parts.length ? parts.join(" · ") : "—";
-};
-
-function setSuperPowerStatus(text, className = "power-mode-status", action = null) {
-  const status = byId("superPowerStatus");
-  status.className = className;
-  status.replaceChildren();
-
-  const label = document.createElement("span");
-  label.textContent = text;
-  status.appendChild(label);
-
-  if (action) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "power-mode-action";
-    button.textContent = action.label;
-    button.addEventListener("click", action.onClick);
-    status.appendChild(button);
-  }
-}
-
-function renderSuperPowerSaver(state, busy = false) {
-  const toggle = byId("setSuperPowerSaver");
-  const desired = !!settings.super_power_saver;
-  if (busy) {
-    toggle.disabled = true;
-    toggle.checked = desired;
-    setSuperPowerStatus(translate("settings.super.applying"));
-    return;
-  }
-  if (!state?.supported) {
-    lastCpuPowerState = state;
-    toggle.checked = false;
-    toggle.disabled = true;
-    setSuperPowerStatus(translate("settings.super.unsupported"), "power-mode-status warning");
-    return;
-  }
-  toggle.disabled = false;
-  toggle.checked = desired;
-  lastCpuPowerState = state;
-  const actual = !!state.active;
-  const caps = frequencyLimitSummary(state);
-
-  if (desired && actual) {
-    setSuperPowerStatus(translate("settings.super.active", { caps }), "power-mode-status active");
-  } else if (desired && !actual) {
-    setSuperPowerStatus(
-      translate("settings.super.wantOnMismatch", { caps }),
-      "power-mode-status warning",
-      {
-        label: translate("settings.super.reapply"),
-        onClick: () => applySuperPowerSaver(true),
-      }
-    );
-  } else if (!desired && actual) {
-    setSuperPowerStatus(
-      translate("settings.super.wantOffMismatch", { caps }),
-      "power-mode-status warning",
-      {
-        label: translate("settings.super.restore"),
-        onClick: () => applySuperPowerSaver(false),
-      }
-    );
-  } else {
-    setSuperPowerStatus(translate("settings.super.inactive", { caps }));
-  }
-}
-
-async function refreshSuperPowerSaver() {
-  try {
-    setSuperPowerStatus(translate("settings.super.checking"));
-    const state = await invoke("get_cpu_power_state");
-    renderSuperPowerSaver(state);
-  } catch (err) {
-    setSuperPowerStatus(translate("settings.super.error", { message: String(err) }), "power-mode-status warning");
-  }
-}
-
-async function applySuperPowerSaver(enabled) {
-  const previousDesired = !!settings.super_power_saver;
-  settings.super_power_saver = enabled;
-  renderSuperPowerSaver(lastCpuPowerState, true);
-  try {
-    const state = await invoke("set_super_power_saver", { enabled });
-    renderSuperPowerSaver(state);
-    persistSettings();
-  } catch (err) {
-    settings.super_power_saver = previousDesired;
-    setSuperPowerStatus(translate("settings.super.error", { message: String(err) }), "power-mode-status warning");
-    await refreshSuperPowerSaver();
   }
 }
 
@@ -1502,10 +1354,6 @@ byId("setSilentStart").addEventListener("change", (e) => {
   settings.silent_start = e.target.checked;
   persistSettings();
 });
-byId("setSuperPowerSaver").addEventListener("change", async (e) => {
-  applySuperPowerSaver(e.target.checked);
-});
-
 function wireSegmentedSetting(groupId, key, apply) {
   byId(groupId).addEventListener("click", (e) => {
     const btn = e.target.closest("[data-setting-value]");

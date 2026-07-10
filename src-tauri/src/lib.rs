@@ -3,7 +3,6 @@
 mod app_power;
 mod battery;
 mod commands;
-mod cpu_power;
 mod history;
 mod power;
 mod reminder;
@@ -20,13 +19,6 @@ use tauri_plugin_autostart::MacosLauncher;
 
 /// 后台采样间隔: 30 秒。
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(30);
-
-pub fn handle_privileged_cli<I>(args: I) -> Result<bool, String>
-where
-    I: IntoIterator<Item = String>,
-{
-    cpu_power::handle_privileged_cli(args)
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -157,8 +149,6 @@ pub fn run() {
             commands::get_app_version,
             commands::get_system_accent_color,
             commands::save_settings,
-            commands::get_cpu_power_state,
-            commands::set_super_power_saver,
             commands::get_app_power_report,
             commands::hide_window,
             commands::quit_app,

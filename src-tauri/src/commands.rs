@@ -1,6 +1,6 @@
 //! Tauri 命令层 — 暴露给前端的 IPC 接口。
 
-use crate::{app_power, battery, cpu_power, history, power, settings, system_accent};
+use crate::{app_power, battery, history, power, settings, system_accent};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
@@ -77,18 +77,6 @@ pub fn save_settings(
         launcher.disable().map_err(|e| e.to_string())?;
     }
     Ok(())
-}
-
-/// 读取 CPU 超级省电模式状态。
-#[tauri::command]
-pub fn get_cpu_power_state() -> cpu_power::CpuPowerState {
-    cpu_power::state()
-}
-
-/// 开启/关闭超级省电模式。写 cpufreq sysfs 需要 pkexec 授权。
-#[tauri::command]
-pub fn set_super_power_saver(enabled: bool) -> Result<cpu_power::CpuPowerState, String> {
-    cpu_power::set_super_power_saver(enabled)
 }
 
 /// 读取按应用耗电估算 (CPU 时间占比加权分配电池瞬时功率，Top N)。

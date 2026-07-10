@@ -34,8 +34,6 @@ pub struct Settings {
     pub silent_start: bool,
     /// 关闭按钮行为。
     pub close_action: CloseAction,
-    /// 超级省电模式的用户期望状态；实际是否生效以 sysfs 实时状态为准。
-    pub super_power_saver: bool,
 
     /// 低电量提醒：放电中电量 ≤ remind_charge_at 时提醒接电源。
     pub remind_charge: bool,
@@ -56,7 +54,6 @@ impl Default for Settings {
             autostart: false,
             silent_start: false,
             close_action: CloseAction::Ask,
-            super_power_saver: false,
             remind_charge: true,
             remind_charge_at: 30,
             remind_unplug: true,
