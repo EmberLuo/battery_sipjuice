@@ -85,6 +85,7 @@ const translations = {
     "stat.batteryPower": "电池功率",
     "stat.batteryTemperature": "电池温度",
     "stat.current": "当前",
+    "stat.rangeTotal": "区间累计",
     "stat.minimum": "区间最小",
     "stat.maximum": "区间最大",
     "stat.average": "区间平均",
@@ -226,6 +227,7 @@ const translations = {
     "stat.batteryPower": "Battery Power",
     "stat.batteryTemperature": "Battery Temperature",
     "stat.current": "Current",
+    "stat.rangeTotal": "Range Total",
     "stat.minimum": "Range Min",
     "stat.maximum": "Range Max",
     "stat.average": "Range Avg",
@@ -737,7 +739,8 @@ const metricConfigs = {
 };
 const metricOrder = {
   battery: ["capacity", "power_w", "temperature", "voltage", "current_ma"],
-  input: ["energy_wh", "power_w", "temperature", "voltage", "current_ma"],
+  // 输入侧没有温度数据（metricConfigs.input.temperature 恒为 disabled），不渲染该按钮
+  input: ["energy_wh", "power_w", "voltage", "current_ma"],
 };
 
 const monitorState = { sourceKind: "battery", metric: "capacity", rangeMs: 300000, inputSourceId: "total" };
@@ -921,25 +924,40 @@ function inputSourceLabel(source) {
   return `${sourceLabel(source.kind)} · ${source.name}`;
 }
 
+// 下拉框选项的内容签名：只在来源集合或语言变化时重建，
+// 避免每 2 秒的轮询把用户正在展开的下拉框打断。
+let inputSourceOptionsSignature = "";
+
 function renderInputSourceOptions() {
   const picker = byId("inputSourcePicker");
   const select = byId("inputSourceSelect");
   picker.hidden = monitorState.sourceKind !== "input";
-  select.replaceChildren();
 
-  const total = document.createElement("option");
-  total.value = "total";
-  total.textContent = translate("chart.input.total");
-  select.appendChild(total);
+  const signature =
+    currentLanguage +
+    "|" +
+    [...knownInputSources.values()]
+      .map((source) => `${source.kind}:${source.name}`)
+      .sort()
+      .join("|");
+  if (signature !== inputSourceOptionsSignature && document.activeElement !== select) {
+    inputSourceOptionsSignature = signature;
+    select.replaceChildren();
 
-  [...knownInputSources.values()]
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .forEach((source) => {
-      const option = document.createElement("option");
-      option.value = source.name;
-      option.textContent = inputSourceLabel(source);
-      select.appendChild(option);
-    });
+    const total = document.createElement("option");
+    total.value = "total";
+    total.textContent = translate("chart.input.total");
+    select.appendChild(total);
+
+    [...knownInputSources.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((source) => {
+        const option = document.createElement("option");
+        option.value = source.name;
+        option.textContent = inputSourceLabel(source);
+        select.appendChild(option);
+      });
+  }
 
   const hasSelected = [...select.options].some((option) => option.value === monitorState.inputSourceId);
   if (!hasSelected) monitorState.inputSourceId = "total";
@@ -950,7 +968,7 @@ function renderChartLegend() {
   byId("chartBandLabel").textContent = translate(
     monitorState.sourceKind === "input" ? "chart.onlinePeriod" : "chart.chargingPeriod"
   );
-  byId("chartMetricName").textContent = metricLabel(currentMetricConfig());
+  byId("chartMetricName").textContent = metricButtonText(currentMetricConfig());
 }
 
 function selectedLiveBuffer() {
@@ -1006,7 +1024,11 @@ function formatMetricValue(value, config) {
   return config.formatter ? config.formatter(value) : `${formatNumber(value, config.decimals)} ${config.unit}`;
 }
 
+// 单调递增的请求序号：快速切换侧别/来源/时间范围时，后发的慢响应不得覆盖新曲线。
+let chartRequestSeq = 0;
+
 async function refreshChart() {
+  const seq = ++chartRequestSeq;
   const rangeMs = monitorState.rangeMs;
   let samples;
   if (rangeMs <= LIVE_MAX_MS) {
@@ -1020,12 +1042,16 @@ async function refreshChart() {
       return;
     }
   }
+  if (seq !== chartRequestSeq) return; // 等待期间已有更新的请求，丢弃过期结果
   renderChart(withInputEnergy(samples));
 }
 
 function renderChart(samples) {
   const metricConfig = currentMetricConfig();
   renderChartLegend();
+  // 输入电量是区间累计曲线：统计卡只保留最终累计值，标签随之切换为"区间累计"。
+  const isEnergyTotal = monitorState.sourceKind === "input" && monitorState.metric === "energy_wh";
+  byId("chartCurrentLabel").textContent = translate(isEnergyTotal ? "stat.rangeTotal" : "stat.current");
   const values = samples.map((sample) => sample[monitorState.metric]).filter((value) => value != null);
 
   if (samples.length < 2 || values.length === 0) {
@@ -1042,13 +1068,27 @@ function renderChart(samples) {
   lastSamples = samples;
   drawChart(samples, monitorState.metric);
 
-  byId("chartCurrent").textContent = formatMetricValue(values[values.length - 1], metricConfig);
-  byId("chartMinimum").textContent = formatMetricValue(Math.min(...values), metricConfig);
-  byId("chartMaximum").textContent = formatMetricValue(Math.max(...values), metricConfig);
-  byId("chartAverage").textContent = formatMetricValue(
-    values.reduce((sum, value) => sum + value, 0) / values.length,
-    metricConfig
-  );
+  // 最新取值样本已过期（如电源刚拔掉、设备曾休眠）时，不把旧值显示为"当前"。
+  // 阈值与曲线断线判定一致；累计电量不受此限，旧区间的累计值仍然有效。
+  let lastValueSample = null;
+  for (let i = samples.length - 1; i >= 0; i--) {
+    if (samples[i][monitorState.metric] != null) {
+      lastValueSample = samples[i];
+      break;
+    }
+  }
+  const isFresh = lastValueSample && Date.now() - lastValueSample.timestamp_ms <= continuityGapThreshold();
+
+  byId("chartCurrent").textContent =
+    isEnergyTotal || isFresh ? formatMetricValue(values[values.length - 1], metricConfig) : "—";
+  byId("chartMinimum").textContent = isEnergyTotal ? "—" : formatMetricValue(Math.min(...values), metricConfig);
+  byId("chartMaximum").textContent = isEnergyTotal ? "—" : formatMetricValue(Math.max(...values), metricConfig);
+  byId("chartAverage").textContent = isEnergyTotal
+    ? "—"
+    : formatMetricValue(
+        values.reduce((sum, value) => sum + value, 0) / values.length,
+        metricConfig
+      );
 }
 
 function drawChart(samples, metric) {
@@ -1087,8 +1127,9 @@ function drawChart(samples, metric) {
   valueMin -= valuePadding;
   valueMax += valuePadding;
   if (metricConfig.clamp) {
-    valueMin = Math.max(metricConfig.clamp[0], valueMin);
-    valueMax = Math.min(metricConfig.clamp[1], valueMax);
+    // 有固定量程的指标（电量 0–100%）直接锁定纵轴，避免小幅波动被自动放大成剧烈变化。
+    valueMin = metricConfig.clamp[0];
+    valueMax = metricConfig.clamp[1];
   }
 
   const xForTime = (time) => paddingLeft + ((time - timeMin) / timeSpan) * plotWidth;
