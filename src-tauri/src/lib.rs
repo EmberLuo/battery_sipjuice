@@ -23,6 +23,11 @@ const SAMPLE_INTERVAL: Duration = Duration::from_secs(30);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 单实例：必须最先注册。再次启动(如从应用菜单点开)时,
+        // 不会开新进程, 而是回调里唤起已有窗口。
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main(app);
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -161,6 +166,7 @@ pub fn run() {
 fn show_main<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
+        let _ = w.unminimize();
         let _ = w.set_focus();
     }
 }
