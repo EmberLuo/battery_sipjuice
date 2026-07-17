@@ -6,6 +6,7 @@ const { listen } = window.__TAURI__.event;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52; // 与 styles.css 的 r=52 一致
 let currentLanguage = "zh-CN";
 let lastSnapshot = null;
+let selectedBatteryId = "";
 
 const translations = {
   "zh-CN": {
@@ -15,6 +16,7 @@ const translations = {
     "section.powerSource": "输入电源",
     "section.appPower": "应用耗电估算",
     "section.about": "关于",
+    "battery.selector": "电池",
     "tab.overview": "概览",
     "tab.monitor": "监测",
     "tab.health": "健康",
@@ -157,6 +159,7 @@ const translations = {
     "section.powerSource": "Power Sources",
     "section.appPower": "Estimated App Power Usage",
     "section.about": "About",
+    "battery.selector": "Battery",
     "tab.overview": "Overview",
     "tab.monitor": "Monitor",
     "tab.health": "Health",
@@ -330,6 +333,43 @@ const ACCENT_CSS_VARIABLES = [
 ];
 const SYSTEM_ACCENT_REFRESH_MS = 30_000;
 
+function snapshotBatteries(snapshot = lastSnapshot) {
+  return Array.isArray(snapshot?.batteries) ? snapshot.batteries : [];
+}
+
+function selectedBattery(snapshot = lastSnapshot) {
+  const batteries = snapshotBatteries(snapshot);
+  return batteries.find((battery) => battery.device === selectedBatteryId) ?? batteries[0] ?? null;
+}
+
+function batteryLabel(battery) {
+  const name = battery.model || battery.manufacturer || battery.device;
+  return name === battery.device ? battery.device : `${name} · ${battery.device}`;
+}
+
+let batteryOptionsSignature = "";
+
+function renderBatteryOptions(batteries = snapshotBatteries()) {
+  const picker = byId("batteryPicker");
+  const select = byId("batterySelect");
+  picker.hidden = batteries.length <= 1;
+
+  const signature = batteries
+    .map((battery) => `${battery.device}:${battery.model ?? ""}:${battery.manufacturer ?? ""}`)
+    .join("|");
+  if (signature !== batteryOptionsSignature && document.activeElement !== select) {
+    batteryOptionsSignature = signature;
+    select.replaceChildren();
+    batteries.forEach((battery) => {
+      const option = document.createElement("option");
+      option.value = battery.device;
+      option.textContent = batteryLabel(battery);
+      select.appendChild(option);
+    });
+  }
+  select.value = selectedBatteryId;
+}
+
 function capacityRingColor(capacity) {
   const percentage = Math.min(100, Math.max(0, Number(capacity) || 0));
   const hue = percentage * 1.2;
@@ -418,11 +458,12 @@ function applyLanguage(language) {
   });
   renderChartSourceChips();
   renderMetricChips();
+  renderBatteryOptions();
   renderInputSourceOptions();
   renderChartLegend();
   setCloseActionValue(settings.close_action);
   if (lastSnapshot) {
-    renderBattery(lastSnapshot.battery);
+    renderBattery(selectedBattery());
     renderSources(lastSnapshot.sources);
     const date = new Date(lastSnapshot.timestamp_ms);
     byId("lastUpdate").textContent = translate("footer.updated", { time: date.toLocaleTimeString(currentLanguage) });
@@ -482,11 +523,12 @@ function formatEstimateWindow(ms) {
   return currentLanguage === "zh-CN" ? `${minutes} 分钟` : `${minutes} min`;
 }
 
-function averagePowerForStatus(status) {
+function averagePowerForStatus(battery) {
+  const status = battery?.status;
   const direction = status === "Charging" ? 1 : status === "Discharging" ? -1 : 0;
   if (!direction) return null;
   const cutoff = Date.now() - TIME_ESTIMATE_WINDOW_MS;
-  const samples = batteryRtBuffer.filter((sample) => {
+  const samples = batteryBuffer(battery.device).filter((sample) => {
     if (sample.timestamp_ms < cutoff || sample.power_w == null) return false;
     return direction > 0 ? sample.power_w > 0 : sample.power_w < 0;
   });
@@ -503,7 +545,7 @@ function minutesForPercentDelta(battery, percentDelta, averagePowerW) {
 
 function remainingUseMinutes(battery) {
   if (battery?.status !== "Discharging" || battery.capacity == null) return null;
-  return minutesForPercentDelta(battery, Number(battery.capacity), averagePowerForStatus("Discharging"));
+  return minutesForPercentDelta(battery, Number(battery.capacity), averagePowerForStatus(battery));
 }
 
 function renderPowerPrediction(battery) {
@@ -523,7 +565,7 @@ function renderPowerPrediction(battery) {
     return;
   }
 
-  const averagePowerW = averagePowerForStatus(battery.status);
+  const averagePowerW = averagePowerForStatus(battery);
   if (averagePowerW == null || fullEnergyWh(battery) == null) {
     setAllEmpty();
     return;
@@ -557,7 +599,23 @@ function renderPowerPrediction(battery) {
 // ---------- 渲染 ----------
 function renderBattery(battery) {
   if (!battery) {
+    byId("modelName").textContent = translate("status.noBattery");
+    byId("statusPill").className = "status-pill";
     byId("statusText").textContent = translate("status.noBattery");
+    byId("capacity").textContent = "--";
+    byId("ring").style.strokeDashoffset = RING_CIRCUMFERENCE;
+    ["heroStatus", "heroTimeRemaining", "heroPower", "heroTemperature"].forEach(
+      (id) => (byId(id).textContent = "—")
+    );
+    [
+      "overviewHealth", "overviewCycles", "overviewFullCapacity", "overviewDesignCapacity",
+      "healthFullCapacity", "healthDesignCapacity", "healthCapacityLost", "healthCycles",
+      "healthCondition", "healthStateOfHealth", "healthTechnology", "healthResistance",
+      "monitorVoltage", "monitorOpenCircuitVoltage", "monitorMaxVoltage", "monitorCurrent",
+      "monitorPower", "monitorTemperature",
+    ].forEach((id) => (byId(id).textContent = "—"));
+    byId("healthScore").innerHTML = `--<small>%</small>`;
+    byId("healthBar").style.width = "0";
     renderPowerPrediction(null);
     return;
   }
@@ -743,7 +801,13 @@ const metricOrder = {
   input: ["energy_wh", "power_w", "voltage", "current_ma"],
 };
 
-const monitorState = { sourceKind: "battery", metric: "capacity", rangeMs: 300000, inputSourceId: "total" };
+const monitorState = {
+  sourceKind: "battery",
+  metric: "capacity",
+  rangeMs: 300000,
+  batteryDeviceId: "",
+  inputSourceId: "total",
+};
 // 仅 5 分档从前端实时缓冲区绘制(2 秒一帧平滑滚动)；≥30 分一律查后端 RRD 归档
 // (30s/5min 粒度足够，且能显示打开软件之前的历史)。
 const LIVE_MAX_MS = 300000;   // ≤ 此范围用实时缓冲
@@ -751,18 +815,35 @@ const BUFFER_MAX_MS = 600000; // 缓冲保留 10 分钟，为 5 分窗口留 2×
 const HISTORY_FINE_STEP_MS = 30_000;
 const HISTORY_COARSE_STEP_MS = 300_000;
 const HISTORY_MAX_POINTS = 240;
-const batteryRtBuffer = [];
+const batteryRtBuffers = new Map();
 const inputRtBuffers = new Map();
 const knownInputSources = new Map();
 let lastSamples = [];
 
 const isMonitorActive = () => byId("monitor").classList.contains("active");
 
+function syncBatterySelection(batteries) {
+  const previous = selectedBatteryId;
+  if (!batteries.some((battery) => battery.device === selectedBatteryId)) {
+    selectedBatteryId = batteries[0]?.device ?? "";
+  }
+  monitorState.batteryDeviceId = selectedBatteryId;
+  renderBatteryOptions(batteries);
+  return previous !== selectedBatteryId;
+}
+
+function batteryBuffer(deviceId) {
+  const key = deviceId || "";
+  if (!batteryRtBuffers.has(key)) batteryRtBuffers.set(key, []);
+  return batteryRtBuffers.get(key);
+}
+
 // 把一帧快照转成与后端 Sample 一致的样本（功率带符号：放电为负）。
 function pushBatteryBuffer(battery, timestampMs) {
   const isCharging = battery.status === "Charging";
   const powerMagnitude = battery.power_now == null ? null : Math.abs(battery.power_now);
-  batteryRtBuffer.push({
+  const buffer = batteryBuffer(battery.device);
+  buffer.push({
     timestamp_ms: timestampMs,
     capacity: battery.capacity ?? null,
     temperature: battery.temperature ?? null,
@@ -772,7 +853,11 @@ function pushBatteryBuffer(battery, timestampMs) {
     charging: isCharging,
   });
   const cutoff = timestampMs - BUFFER_MAX_MS;
-  while (batteryRtBuffer.length && batteryRtBuffer[0].timestamp_ms < cutoff) batteryRtBuffer.shift();
+  while (buffer.length && buffer[0].timestamp_ms < cutoff) buffer.shift();
+}
+
+function pushBatteryBuffers(batteries, timestampMs) {
+  batteries.forEach((battery) => pushBatteryBuffer(battery, timestampMs));
 }
 
 function absOrNull(value) {
@@ -847,21 +932,32 @@ function pushInputBuffers(sources, timestampMs) {
 
 // 启动时用后端 RRD 归档预填实时缓冲区，使 5 分档一打开就能显示打开软件之前的数据。
 // 后端为 30s 粒度的历史，随后由实时 tick 追加 2s 粒度的新点；二者按时间天然衔接。
-async function seedBuffer(sourceKind = "battery", inputSourceId = "total") {
+async function seedBuffer(sourceKind = "battery", sourceId = "") {
   try {
     const args = { rangeMs: BUFFER_MAX_MS, sourceKind };
-    if (sourceKind === "input") args.inputSourceId = inputSourceId;
+    if (sourceKind === "input") args.inputSourceId = sourceId || "total";
+    else args.batteryDeviceId = sourceId || monitorState.batteryDeviceId;
     const hist = await invoke("get_history", args);
     if (Array.isArray(hist) && hist.length) {
       // 仅插入早于当前缓冲最早点的历史，避免与已采集的实时点重叠/乱序。
-      const buffer = sourceKind === "input" ? inputBuffer(inputSourceId) : batteryRtBuffer;
+      const buffer = sourceKind === "input" ? inputBuffer(sourceId || "total") : batteryBuffer(args.batteryDeviceId);
       const earliest = buffer.length ? buffer[0].timestamp_ms : Infinity;
       const older = hist.filter((sample) => sample.timestamp_ms < earliest);
       if (older.length) buffer.unshift(...older);
     }
+    return true;
   } catch (err) {
     console.error("预填历史失败:", err);
+    return false;
   }
+}
+
+const seededBatteryIds = new Set();
+
+async function ensureBatteryBufferSeeded(deviceId) {
+  if (!deviceId || seededBatteryIds.has(deviceId)) return;
+  seededBatteryIds.add(deviceId);
+  if (!(await seedBuffer("battery", deviceId))) seededBatteryIds.delete(deviceId);
 }
 
 function formatAxisTime(ms, rangeMs) {
@@ -974,12 +1070,13 @@ function renderChartLegend() {
 function selectedLiveBuffer() {
   return monitorState.sourceKind === "input"
     ? inputBuffer(monitorState.inputSourceId)
-    : batteryRtBuffer;
+    : batteryBuffer(monitorState.batteryDeviceId);
 }
 
 function historyArgs(rangeMs) {
   const args = { rangeMs, sourceKind: monitorState.sourceKind };
   if (monitorState.sourceKind === "input") args.inputSourceId = monitorState.inputSourceId;
+  else args.batteryDeviceId = monitorState.batteryDeviceId;
   return args;
 }
 
@@ -1242,6 +1339,20 @@ byId("inputSourceSelect").addEventListener("change", (event) => {
   seedBuffer("input", monitorState.inputSourceId).then(refreshChart);
 });
 
+byId("batterySelect").addEventListener("change", async (event) => {
+  const deviceId = event.target.value || "";
+  selectedBatteryId = deviceId;
+  monitorState.batteryDeviceId = selectedBatteryId;
+  renderBatteryOptions();
+  renderBattery(selectedBattery());
+  refreshChart();
+  await ensureBatteryBufferSeeded(deviceId);
+  if (monitorState.batteryDeviceId === deviceId) {
+    renderBattery(selectedBattery());
+    refreshChart();
+  }
+});
+
 renderChartSourceChips();
 renderMetricChips();
 renderInputSourceOptions();
@@ -1265,10 +1376,21 @@ async function tick() {
   try {
     const snap = await invoke("get_snapshot");
     lastSnapshot = snap;
-    if (snap.battery) pushBatteryBuffer(snap.battery, snap.timestamp_ms);
+    const batteries = snapshotBatteries(snap);
+    const batteryChanged = syncBatterySelection(batteries);
+    pushBatteryBuffers(batteries, snap.timestamp_ms);
     pushInputBuffers(snap.sources, snap.timestamp_ms);
-    renderBattery(snap.battery);
+    renderBattery(selectedBattery(snap));
     renderSources(snap.sources);
+    if (batteryChanged && selectedBatteryId) {
+      const deviceId = selectedBatteryId;
+      ensureBatteryBufferSeeded(deviceId).then(() => {
+        if (deviceId === monitorState.batteryDeviceId) {
+          renderBattery(selectedBattery());
+          if (isMonitorActive()) refreshChart();
+        }
+      });
+    }
     renderInputSourceOptions();
     // 监测页可见时跟随主轮询实时刷新曲线（短档平滑滚动，长档查后端历史）。
     if (isMonitorActive()) refreshChart();
@@ -1297,8 +1419,8 @@ async function tickAppPowerReport() {
 tickAppPowerReport();
 setInterval(tickAppPowerReport, 8000);
 
-// 预填历史缓冲，完成后若监测页可见则立即重绘短档曲线。
-Promise.all([seedBuffer("battery"), seedBuffer("input", "total")]).then(() => {
+// 输入历史可立即预填；电池历史需等首帧快照确定设备 ID 后分别预填。
+seedBuffer("input", "total").then(() => {
   if (isMonitorActive()) refreshChart();
 });
 
@@ -1419,7 +1541,8 @@ function commitThreshold(inputId, key, minValue, maxValue) {
   nextValue = Math.min(maxValue, Math.max(minValue, nextValue));
   input.value = nextValue;
   settings[key] = nextValue;
-  if (lastSnapshot?.battery) renderPowerPrediction(lastSnapshot.battery);
+  const battery = selectedBattery();
+  if (battery) renderPowerPrediction(battery);
   persistSettings();
 }
 

@@ -49,11 +49,6 @@ pub fn list_batteries() -> Vec<String> {
         .collect()
 }
 
-/// 返回主电池设备名。当前 UI 仍显示单电池；后端已经支持枚举多个电池。
-pub fn find_battery() -> Option<String> {
-    list_batteries().into_iter().next()
-}
-
 #[derive(Serialize, Clone)]
 pub struct CapacityValue {
     /// 用户可读数值。charge 系列为 mAh，energy 系列为 Wh。
@@ -90,15 +85,16 @@ pub struct BatteryInfo {
     pub power_now: Option<f64>,           // W
     pub temperature: Option<f64>,         // °C
     pub internal_resistance: Option<f64>, // mΩ
-
-    // 时间估算 (分钟)。没有足够数据时为 None。
-    pub time_to_empty_min: Option<i64>,
-    pub time_to_full_min: Option<i64>,
 }
 
-/// 采集主电池快照。无电池设备时返回 None。
-pub fn collect() -> Option<BatteryInfo> {
-    collect_device(&find_battery()?)
+/// 采集所有当前存在的电池，设备顺序与 `list_batteries` 一致且稳定。
+/// `present=0` 的空电池槽不会暴露给上层，缺少 present 字段的设备仍会保留。
+pub fn collect_all() -> Vec<BatteryInfo> {
+    list_batteries()
+        .into_iter()
+        .filter_map(|device| collect_device(&device))
+        .filter(|battery| battery.present != Some(false))
+        .collect()
 }
 
 /// 采集指定电池设备并归一化。
@@ -118,7 +114,7 @@ pub fn collect_device(dev: &str) -> Option<BatteryInfo> {
     let capacity = read_i64(dev, "capacity");
     let status = read_raw(dev, "status");
 
-    let mut b = BatteryInfo {
+    Some(BatteryInfo {
         device: dev.to_string(),
         model: read_raw(dev, "model_name"),
         manufacturer: read_raw(dev, "manufacturer"),
@@ -139,14 +135,7 @@ pub fn collect_device(dev: &str) -> Option<BatteryInfo> {
         power_now,
         temperature: read_i64(dev, "temp").map(|v| v as f64 / 10.0),
         internal_resistance: read_i64(dev, "internal_resistance").map(|v| v as f64 / 1000.0),
-        time_to_empty_min: None,
-        time_to_full_min: None,
-    };
-
-    let (tte, ttf) = estimate_times(&b);
-    b.time_to_empty_min = tte;
-    b.time_to_full_min = ttf;
-    Some(b)
+    })
 }
 
 fn micro_to_unit(v: Option<i64>) -> Option<f64> {
@@ -212,60 +201,5 @@ fn read_power(dev: &str, voltage_now: Option<f64>, current_now: Option<f64>) -> 
         raw
     } else {
         Some(voltage_now? * current_now? / 1000.0)
-    }
-}
-
-/// 由剩余容量与瞬时功率估算放电或充电剩余时间。
-fn estimate_times(b: &BatteryInfo) -> (Option<i64>, Option<i64>) {
-    let Some(capacity) = b.capacity else {
-        return (None, None);
-    };
-    let Some(full) = b.full_capacity.as_ref() else {
-        return (None, None);
-    };
-
-    let pct = capacity as f64 / 100.0;
-    let status = b.status.as_deref().unwrap_or("");
-
-    let (full_amount, rate_per_hour) =
-        if let (Some(full_wh), Some(power)) = (full_energy_wh(b), b.power_now.map(f64::abs)) {
-            (full_wh, power)
-        } else if full.unit == "mAh" {
-            let Some(current) = b.current_now.map(f64::abs) else {
-                return (None, None);
-            };
-            (full.value, current)
-        } else if full.unit == "Wh" {
-            let Some(power) = b.power_now.map(f64::abs) else {
-                return (None, None);
-            };
-            (full.value, power)
-        } else {
-            return (None, None);
-        };
-    if rate_per_hour < 0.01 {
-        return (None, None);
-    }
-
-    let now = pct * full_amount;
-    if status == "Charging" {
-        let remain = (full_amount - now).max(0.0);
-        (None, Some((remain / rate_per_hour * 60.0) as i64))
-    } else if status == "Discharging" {
-        (Some((now / rate_per_hour * 60.0) as i64), None)
-    } else {
-        (None, None)
-    }
-}
-
-fn full_energy_wh(b: &BatteryInfo) -> Option<f64> {
-    let full = b.full_capacity.as_ref()?;
-    if full.unit == "Wh" {
-        Some(full.value)
-    } else if full.unit == "mAh" {
-        let voltage = b.voltage_now.or(b.voltage_ocv).or(b.voltage_max)?;
-        Some(full.value * voltage / 1000.0)
-    } else {
-        None
     }
 }

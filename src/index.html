@@ -17,9 +17,15 @@
           <p class="subtitle" id="modelName">读取中…</p>
         </div>
       </div>
-      <div class="status-pill" id="statusPill">
-        <span class="dot"></span>
-        <span id="statusText">—</span>
+      <div class="topbar-actions">
+        <label class="battery-picker" id="batteryPicker" hidden>
+          <span data-i18n="battery.selector">电池</span>
+          <select id="batterySelect" aria-label="电池" data-i18n-aria="battery.selector"></select>
+        </label>
+        <div class="status-pill" id="statusPill">
+          <span class="dot"></span>
+          <span id="statusText">—</span>
+        </div>
       </div>
     </header>
 

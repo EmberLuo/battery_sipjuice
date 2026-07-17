@@ -11,7 +11,7 @@ mod system_accent;
 
 use std::time::Duration;
 use tauri::{
-    menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
+    menu::{CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItem, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WindowEvent,
 };
@@ -19,6 +19,42 @@ use tauri_plugin_autostart::MacosLauncher;
 
 /// 后台采样间隔: 30 秒。
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(30);
+
+struct TrayMenuItems {
+    show: MenuItem<tauri::Wry>,
+    lightweight: CheckMenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
+}
+
+struct TrayLabels {
+    show: &'static str,
+    lightweight: &'static str,
+    quit: &'static str,
+}
+
+fn tray_labels(language: &str) -> TrayLabels {
+    if language == "en-US" {
+        TrayLabels {
+            show: "Show Window",
+            lightweight: "Lightweight Mode",
+            quit: "Quit",
+        }
+    } else {
+        TrayLabels {
+            show: "显示窗口",
+            lightweight: "轻量模式",
+            quit: "退出",
+        }
+    }
+}
+
+pub(crate) fn update_tray_menu_language(app: &tauri::AppHandle, language: &str) {
+    let labels = tray_labels(language);
+    let items = app.state::<TrayMenuItems>();
+    let _ = items.show.set_text(labels.show);
+    let _ = items.lightweight.set_text(labels.lightweight);
+    let _ = items.quit.set_text(labels.quit);
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -52,11 +88,12 @@ pub fn run() {
             app.manage(app_power::AppPowerStore::default());
 
             // 系统托盘 + 右键菜单（显示窗口 / 轻量模式 / 退出）。
-            let show_item = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
-            let light_item = CheckMenuItemBuilder::with_id("lightweight", "轻量模式")
+            let labels = tray_labels(&current.language);
+            let show_item = MenuItemBuilder::with_id("show", labels.show).build(app)?;
+            let light_item = CheckMenuItemBuilder::with_id("lightweight", labels.lightweight)
                 .checked(false)
                 .build(app)?;
-            let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", labels.quit).build(app)?;
             let menu = MenuBuilder::new(app)
                 .item(&show_item)
                 .item(&light_item)
@@ -97,6 +134,11 @@ pub fn run() {
                 tray = tray.icon(icon);
             }
             tray.build(app)?;
+            app.manage(TrayMenuItems {
+                show: show_item,
+                lightweight: light_item,
+                quit: quit_item,
+            });
 
             // 关闭按钮(X)拦截：按设置决定退出 / 最小化到托盘 / 弹框询问。
             if let Some(window) = app.get_webview_window("main") {
@@ -133,10 +175,15 @@ pub fn run() {
             std::thread::spawn(move || {
                 let mut fired = reminder::Fired::default();
                 let mut snapshot = |h: &tauri::AppHandle| {
-                    h.state::<history::HistoryStore>().tick();
+                    let batteries = battery::collect_all();
+                    h.state::<history::HistoryStore>().tick(&batteries);
                     let settings = h.state::<settings::SettingsStore>().get();
-                    reminder::evaluate(h, &settings, &mut fired);
-                    let battery_power_w = battery::collect().and_then(|b| b.power_now);
+                    reminder::evaluate(h, &settings, &batteries, &mut fired);
+                    let battery_power_w = batteries
+                        .iter()
+                        .filter(|battery| battery.status.as_deref() == Some("Discharging"))
+                        .filter_map(|battery| battery.power_now.map(f64::abs))
+                        .reduce(|total, power| total + power);
                     h.state::<app_power::AppPowerStore>().tick(battery_power_w);
                 };
                 snapshot(&handle);
@@ -180,5 +227,17 @@ fn apply_lightweight_mode<R: tauri::Runtime>(app: &tauri::AppHandle<R>, enabled:
             let _ = w.show();
             let _ = w.set_focus();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tray_labels_follow_language() {
+        assert_eq!(tray_labels("en-US").show, "Show Window");
+        assert_eq!(tray_labels("zh-CN").lightweight, "轻量模式");
+        assert_eq!(tray_labels("unknown").quit, "退出");
     }
 }

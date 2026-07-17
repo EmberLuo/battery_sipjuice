@@ -8,7 +8,7 @@ use tauri_plugin_autostart::ManagerExt;
 /// 一次完整的系统电源快照。
 #[derive(Serialize)]
 pub struct Snapshot {
-    pub battery: Option<battery::BatteryInfo>,
+    pub batteries: Vec<battery::BatteryInfo>,
     pub sources: Vec<power::PowerSource>,
     pub timestamp_ms: u64,
 }
@@ -16,9 +16,8 @@ pub struct Snapshot {
 /// 采集电池 + 电源的完整快照。前端定时轮询此命令。
 #[tauri::command]
 pub fn get_snapshot() -> Snapshot {
-    let bat = battery::collect();
     Snapshot {
-        battery: bat,
+        batteries: battery::collect_all(),
         sources: power::collect(),
         timestamp_ms: history::now_ms(),
     }
@@ -29,12 +28,14 @@ pub fn get_snapshot() -> Snapshot {
 pub fn get_history(
     range_ms: u64,
     source_kind: Option<String>,
+    battery_device_id: Option<String>,
     input_source_id: Option<String>,
     store: tauri::State<'_, history::HistoryStore>,
 ) -> Vec<history::Sample> {
     store.query(
         range_ms,
         source_kind.as_deref().unwrap_or("battery"),
+        battery_device_id.as_deref(),
         input_source_id.as_deref(),
     )
 }
@@ -66,7 +67,9 @@ pub fn save_settings(
 ) -> Result<(), String> {
     // 先确保设置落盘成功，再同步系统状态，避免两者不一致。
     let want = new_settings.autostart;
+    let language = new_settings.language.clone();
     store.set(new_settings)?;
+    crate::update_tray_menu_language(&app, &language);
 
     // 同步 autostart 到系统（LaunchAgent / XDG autostart）。
     let launcher = app.autolaunch();

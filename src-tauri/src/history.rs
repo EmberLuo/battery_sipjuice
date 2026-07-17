@@ -1,12 +1,12 @@
 //! 历史趋势采集 — 定时采样电池快照，存入定长 RRD 风格环形归档，供前端画曲线。
 //!
 //! 设计 (round-robin / 多分辨率归档，借鉴 RRDtool 思想):
-//! - 两级归档，文件大小固定 (~363KB)，不随时间增长、无需压实扫描:
+//! - 每块电池/每个输入源各有一份两级归档 (~363KB)，单份大小固定、无需压实扫描:
 //!   · fine   : 30s 步长 × 2880 槽 = 最近 24 小时
 //!   · coarse : 5min 步长 × 2016 槽 = 最近 7 天 (写入时按平均合并)
 //! - 写入即合并 (consolidate-on-write): 每个时间桶对落入的样本累加 sum/count，
 //!   查询时算平均；app 关闭期间不采样，未写入的槽视为 None → 前端断线。
-//! - 存储格式为定长小端二进制 (history.rdb)，写入用临时文件 + rename 原子替换。
+//! - 存储格式为小端二进制 (history.rdb)，外层按设备 ID 分组，写入用临时文件 + rename 原子替换。
 //! - 旧版 history.jsonl 存在时自动迁移到归档并改名为 .bak。
 //! - query 选合适分辨率的归档，再降采样到约 HISTORY_MAX_POINTS 个点，避免前端绘制过密。
 
@@ -37,7 +37,9 @@ const ROW_BYTES: usize = 8 + 4 + 4 + 5 * (8 + 4);
 const ARCHIVES_BYTES: usize = (ROWS_FINE + ROWS_COARSE) * ROW_BYTES;
 /// 文件魔数，用于校验。
 const MAGIC: &[u8; 4] = b"BSR1";
+const BATTERY_MAGIC: &[u8; 4] = b"BSB1";
 const INPUT_MAGIC: &[u8; 4] = b"BSI1";
+const LEGACY_BATTERY_ID: &str = "\0legacy-primary";
 const TOTAL_INPUT_SOURCE_ID: &str = "total";
 
 /// 落盘节流: 每 N 次采样落盘一次 (10 × 30s ≈ 5 分钟)，降低写放大。
@@ -266,6 +268,7 @@ impl Archives {
     }
 
     /// 序列化为定长二进制: MAGIC + fine 槽 + coarse 槽。
+    #[cfg(test)]
     fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(MAGIC.len() + ARCHIVES_BYTES);
         out.extend_from_slice(MAGIC);
@@ -303,6 +306,118 @@ impl Archives {
         }
         Some(a)
     }
+}
+
+#[derive(Clone)]
+struct BatteryReading {
+    device_id: String,
+    capacity: Option<f64>,
+    temperature: Option<f64>,
+    power_w: Option<f64>,
+    voltage: Option<f64>,
+    current_ma: Option<f64>,
+    charging: bool,
+}
+
+#[derive(Default)]
+struct BatteryArchives {
+    devices: HashMap<String, Archives>,
+}
+
+impl BatteryArchives {
+    fn from_legacy(archives: Archives) -> Self {
+        let mut devices = HashMap::new();
+        devices.insert(LEGACY_BATTERY_ID.to_string(), archives);
+        BatteryArchives { devices }
+    }
+
+    /// 首次看到真实设备名时，把旧单电池归档归属到排序后的第一块电池。
+    fn add_readings(&mut self, timestamp_ms: u64, readings: &[BatteryReading]) -> bool {
+        let adopted_legacy = readings
+            .first()
+            .and_then(|reading| {
+                self.devices
+                    .remove(LEGACY_BATTERY_ID)
+                    .map(|archives| (reading.device_id.clone(), archives))
+            })
+            .is_some_and(|(device_id, archives)| {
+                self.devices.entry(device_id).or_insert(archives);
+                true
+            });
+
+        for reading in readings {
+            self.devices
+                .entry(reading.device_id.clone())
+                .or_insert_with(Archives::new)
+                .add(
+                    timestamp_ms,
+                    reading.capacity,
+                    reading.temperature,
+                    reading.power_w,
+                    reading.voltage,
+                    reading.current_ma,
+                    reading.charging,
+                );
+        }
+        adopted_legacy
+    }
+
+    fn query(&self, range_ms: u64, device_id: Option<&str>) -> Vec<Sample> {
+        let requested = device_id.filter(|id| !id.trim().is_empty());
+        let archives = requested
+            .and_then(|id| self.devices.get(id))
+            .or_else(|| {
+                // 旧格式尚未等到第一次采样完成迁移时，仍可为当前选中设备提供旧历史。
+                (self.devices.len() == 1)
+                    .then(|| self.devices.get(LEGACY_BATTERY_ID))
+                    .flatten()
+            })
+            .or_else(|| {
+                requested.is_none().then(|| {
+                    let mut ids = self
+                        .devices
+                        .keys()
+                        .filter(|id| id.as_str() != LEGACY_BATTERY_ID)
+                        .collect::<Vec<_>>();
+                    ids.sort();
+                    ids.first().and_then(|id| self.devices.get(*id))
+                })?
+            });
+        archives
+            .map(|archives| query_archives(archives, range_ms))
+            .unwrap_or_default()
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        named_archives_to_bytes(BATTERY_MAGIC, &self.devices)
+    }
+
+    fn from_bytes(buf: &[u8]) -> Option<Self> {
+        Some(BatteryArchives {
+            devices: named_archives_from_bytes(buf, BATTERY_MAGIC)?,
+        })
+    }
+}
+
+fn battery_readings(batteries: &[battery::BatteryInfo]) -> Vec<BatteryReading> {
+    batteries
+        .iter()
+        .map(|battery| {
+            let charging = battery.status.as_deref() == Some("Charging");
+            BatteryReading {
+                device_id: battery.device.clone(),
+                capacity: battery.capacity.map(|value| value as f64),
+                temperature: battery.temperature,
+                // 功率带符号: 放电为负，充电为正，便于曲线区分方向。
+                power_w: battery
+                    .power_now
+                    .map(|power| if charging { power.abs() } else { -power.abs() }),
+                voltage: battery.voltage_now,
+                current_ma: battery.current_now,
+                charging,
+            }
+        })
+        .collect()
 }
 
 #[derive(Clone)]
@@ -347,56 +462,66 @@ impl InputArchives {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut source_ids = self.sources.keys().collect::<Vec<_>>();
-        source_ids.sort();
-
-        let mut out = Vec::with_capacity(
-            INPUT_MAGIC.len()
-                + 4
-                + source_ids
-                    .iter()
-                    .map(|id| 4 + id.len() + ARCHIVES_BYTES)
-                    .sum::<usize>(),
-        );
-        out.extend_from_slice(INPUT_MAGIC);
-        out.extend_from_slice(&(source_ids.len() as u32).to_le_bytes());
-        for source_id in source_ids {
-            let id_bytes = source_id.as_bytes();
-            out.extend_from_slice(&(id_bytes.len() as u32).to_le_bytes());
-            out.extend_from_slice(id_bytes);
-            self.sources[source_id].write_archive_bytes(&mut out);
-        }
-        out
+        named_archives_to_bytes(INPUT_MAGIC, &self.sources)
     }
 
     fn from_bytes(buf: &[u8]) -> Option<Self> {
-        if buf.len() < INPUT_MAGIC.len() + 4 || &buf[..INPUT_MAGIC.len()] != INPUT_MAGIC {
+        Some(InputArchives {
+            sources: named_archives_from_bytes(buf, INPUT_MAGIC)?,
+        })
+    }
+}
+
+fn named_archives_to_bytes(magic: &[u8; 4], archives_by_id: &HashMap<String, Archives>) -> Vec<u8> {
+    let mut ids = archives_by_id.keys().collect::<Vec<_>>();
+    ids.sort();
+    let mut out = Vec::with_capacity(
+        magic.len()
+            + 4
+            + ids
+                .iter()
+                .map(|id| 4 + id.len() + ARCHIVES_BYTES)
+                .sum::<usize>(),
+    );
+    out.extend_from_slice(magic);
+    out.extend_from_slice(&(ids.len() as u32).to_le_bytes());
+    for id in ids {
+        let id_bytes = id.as_bytes();
+        out.extend_from_slice(&(id_bytes.len() as u32).to_le_bytes());
+        out.extend_from_slice(id_bytes);
+        archives_by_id[id].write_archive_bytes(&mut out);
+    }
+    out
+}
+
+fn named_archives_from_bytes(buf: &[u8], magic: &[u8; 4]) -> Option<HashMap<String, Archives>> {
+    if buf.len() < magic.len() + 4 || &buf[..magic.len()] != magic {
+        return None;
+    }
+
+    let mut offset = magic.len();
+    let count = read_u32(buf, &mut offset)? as usize;
+    let mut archives_by_id = HashMap::with_capacity(count);
+    for _ in 0..count {
+        let id_len = read_u32(buf, &mut offset)? as usize;
+        let id_end = offset.checked_add(id_len)?;
+        if id_end > buf.len() {
             return None;
         }
+        let id = std::str::from_utf8(&buf[offset..id_end]).ok()?.to_string();
+        offset = id_end;
 
-        let mut offset = INPUT_MAGIC.len();
-        let source_count = read_u32(buf, &mut offset)? as usize;
-        let mut sources = HashMap::with_capacity(source_count);
-        for _ in 0..source_count {
-            let id_len = read_u32(buf, &mut offset)? as usize;
-            let id_end = offset.checked_add(id_len)?;
-            if id_end > buf.len() {
-                return None;
-            }
-            let source_id = std::str::from_utf8(&buf[offset..id_end]).ok()?.to_string();
-            offset = id_end;
-
-            let archive_end = offset.checked_add(ARCHIVES_BYTES)?;
-            if archive_end > buf.len() {
-                return None;
-            }
-            let archives = Archives::from_archive_bytes(&buf[offset..archive_end])?;
-            offset = archive_end;
-            sources.insert(source_id, archives);
+        let archive_end = offset.checked_add(ARCHIVES_BYTES)?;
+        if archive_end > buf.len() {
+            return None;
         }
-
-        (offset == buf.len()).then_some(InputArchives { sources })
+        let archives = Archives::from_archive_bytes(&buf[offset..archive_end])?;
+        offset = archive_end;
+        if archives_by_id.insert(id, archives).is_some() {
+            return None;
+        }
     }
+    (offset == buf.len()).then_some(archives_by_id)
 }
 
 fn read_u32(buf: &[u8], offset: &mut usize) -> Option<u32> {
@@ -461,7 +586,7 @@ fn average_options(values: impl Iterator<Item = f64>) -> Option<f64> {
 
 pub struct HistoryStore {
     path: PathBuf,
-    archives: Mutex<Archives>,
+    battery_archives: Mutex<BatteryArchives>,
     input_path: PathBuf,
     input_archives: Mutex<InputArchives>,
     writes: AtomicU32,
@@ -473,20 +598,24 @@ impl HistoryStore {
     pub fn load(path: PathBuf) -> Self {
         let jsonl = path.with_extension("jsonl");
         let input_path = path.with_file_name("input_history.rdb");
-        let (archives, migrated) = match fs::read(&path)
-            .ok()
-            .and_then(|buf| Archives::from_bytes(&buf))
-        {
-            Some(a) => (a, false),
-            None => migrate_legacy_jsonl(&jsonl),
-        };
+        let existing = fs::read(&path).ok();
+        let (battery_archives, migrated) =
+            if let Some(archives) = existing.as_deref().and_then(BatteryArchives::from_bytes) {
+                (archives, false)
+            } else if let Some(archives) = existing.as_deref().and_then(Archives::from_bytes) {
+                // BSR1 单电池归档会在第一次真实采样时归属到第一块电池。
+                (BatteryArchives::from_legacy(archives), false)
+            } else {
+                let (archives, migrated) = migrate_legacy_jsonl(&jsonl);
+                (BatteryArchives::from_legacy(archives), migrated)
+            };
         let input_archives = fs::read(&input_path)
             .ok()
             .and_then(|buf| InputArchives::from_bytes(&buf))
             .unwrap_or_default();
         let store = HistoryStore {
             path,
-            archives: Mutex::new(archives),
+            battery_archives: Mutex::new(battery_archives),
             input_path,
             input_archives: Mutex::new(input_archives),
             writes: AtomicU32::new(0),
@@ -504,30 +633,16 @@ impl HistoryStore {
     }
 
     /// 采样当前电池状态并并入归档。由后台线程定时调用。
-    pub fn tick(&self) {
+    pub fn tick(&self, batteries: &[battery::BatteryInfo]) {
         let timestamp_ms = now_ms();
-        let mut wrote_battery = false;
-
-        if let Some(battery) = battery::collect() {
-            let charging = battery.status.as_deref() == Some("Charging");
-            // 功率带符号: 放电(Discharging)为负，便于曲线区分方向。
-            let power_w = battery
-                .power_now
-                .map(|power| if charging { power.abs() } else { -power.abs() });
-
-            if let Ok(mut archives) = self.archives.lock() {
-                archives.add(
-                    timestamp_ms,
-                    battery.capacity.map(|value| value as f64),
-                    battery.temperature,
-                    power_w,
-                    battery.voltage_now,
-                    battery.current_now,
-                    charging,
-                );
-                wrote_battery = true;
-            }
-        }
+        let readings = battery_readings(batteries);
+        let (wrote_battery, adopted_legacy) = if readings.is_empty() {
+            (false, false)
+        } else if let Ok(mut archives) = self.battery_archives.lock() {
+            (true, archives.add_readings(timestamp_ms, &readings))
+        } else {
+            (false, false)
+        };
 
         let readings = input_readings(&power::collect());
         let wrote_input = if readings.is_empty() {
@@ -540,11 +655,12 @@ impl HistoryStore {
         };
 
         // 节流落盘: 内存归档是查询来源，磁盘只需周期性持久化。
-        if wrote_battery
-            && self
-                .writes
-                .fetch_add(1, Ordering::Relaxed)
-                .is_multiple_of(FLUSH_EVERY)
+        if adopted_legacy
+            || (wrote_battery
+                && self
+                    .writes
+                    .fetch_add(1, Ordering::Relaxed)
+                    .is_multiple_of(FLUSH_EVERY))
         {
             self.flush();
         }
@@ -562,7 +678,7 @@ impl HistoryStore {
     /// 返回是否成功，供迁移流程据此决定是否归档旧文件。
     fn flush(&self) -> bool {
         let bytes = {
-            let Ok(a) = self.archives.lock() else {
+            let Ok(a) = self.battery_archives.lock() else {
                 return false;
             };
             a.to_bytes()
@@ -605,6 +721,7 @@ impl HistoryStore {
         &self,
         range_ms: u64,
         source_kind: &str,
+        battery_device_id: Option<&str>,
         input_source_id: Option<&str>,
     ) -> Vec<Sample> {
         if source_kind == "input" {
@@ -614,9 +731,9 @@ impl HistoryStore {
                 .map(|archives| archives.query(range_ms, input_source_id))
                 .unwrap_or_default();
         }
-        self.archives
+        self.battery_archives
             .lock()
-            .map(|archives| query_archives(&archives, range_ms))
+            .map(|archives| archives.query(range_ms, battery_device_id))
             .unwrap_or_default()
     }
 }
@@ -918,6 +1035,72 @@ mod tests {
             (actual - expected).abs() < 0.000_001,
             "expected {expected}, got {actual}"
         );
+    }
+
+    fn battery_reading(device_id: &str, capacity: f64, power_w: f64) -> BatteryReading {
+        BatteryReading {
+            device_id: device_id.to_string(),
+            capacity: Some(capacity),
+            temperature: Some(30.0),
+            power_w: Some(power_w),
+            voltage: Some(4.0),
+            current_ma: Some(power_w * 250.0),
+            charging: power_w > 0.0,
+        }
+    }
+
+    #[test]
+    fn battery_archives_keep_devices_separate() {
+        let mut archives = BatteryArchives::default();
+        let base = now_ms().saturating_sub(HISTORY_FINE_STEP_MS);
+        archives.add_readings(
+            base,
+            &[
+                battery_reading("BAT0", 20.0, -4.0),
+                battery_reading("BAT1", 80.0, -6.0),
+            ],
+        );
+
+        let bat0 = archives.query(10 * HISTORY_FINE_STEP_MS, Some("BAT0"));
+        let bat1 = archives.query(10 * HISTORY_FINE_STEP_MS, Some("BAT1"));
+        assert_eq!(bat0.len(), 1);
+        assert_eq!(bat1.len(), 1);
+        assert_eq!(bat0[0].capacity, Some(20));
+        assert_eq!(bat1[0].capacity, Some(80));
+        assert!(archives
+            .query(10 * HISTORY_FINE_STEP_MS, Some("missing"))
+            .is_empty());
+    }
+
+    #[test]
+    fn battery_archives_adopt_legacy_primary_history() {
+        let base = now_ms().saturating_sub(2 * HISTORY_FINE_STEP_MS);
+        let mut legacy = Archives::new();
+        legacy.add(base, Some(40.0), None, Some(-3.0), None, None, false);
+        let mut archives = BatteryArchives::from_legacy(legacy);
+
+        assert!(archives.add_readings(
+            base + HISTORY_FINE_STEP_MS,
+            &[battery_reading("BAT0", 39.0, -3.5)],
+        ));
+        let samples = archives.query(10 * HISTORY_FINE_STEP_MS, Some("BAT0"));
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].capacity, Some(40));
+        assert_eq!(samples[1].capacity, Some(39));
+    }
+
+    #[test]
+    fn battery_archives_binary_round_trip() {
+        let mut archives = BatteryArchives::default();
+        let base = now_ms().saturating_sub(HISTORY_FINE_STEP_MS);
+        archives.add_readings(base, &[battery_reading("BAT0", 55.0, -5.0)]);
+
+        let bytes = archives.to_bytes();
+        let back = BatteryArchives::from_bytes(&bytes).expect("多电池历史应能还原");
+        let samples = back.query(10 * HISTORY_FINE_STEP_MS, Some("BAT0"));
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].capacity, Some(55));
+        assert!(BatteryArchives::from_bytes(b"BSR1").is_none());
     }
 
     #[test]
