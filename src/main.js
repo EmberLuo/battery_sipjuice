@@ -45,11 +45,15 @@ const translations = {
     "settings.silent.desc": "启动时不显示窗口，仅在系统托盘运行",
     "settings.close.name": "关闭按钮行为",
     "settings.close.desc": "点击窗口关闭按钮(✕)时的动作",
-    "settings.reminders.desc": "按电量阈值弹出系统通知，纯软件实现，任何设备都能用，不改变充电行为。",
+    "settings.reminders.desc": "按电量和设备支持的温度阈值弹出系统通知，纯软件实现，不改变充电行为。",
     "settings.low.name": "低电量提醒",
     "settings.low.desc": "放电时电量低于阈值，提醒接上电源",
     "settings.high.name": "高电量提醒",
     "settings.high.desc": "充电时电量高于阈值，提醒拔掉电源",
+    "settings.tempHigh.name": "高温提醒",
+    "settings.tempHigh.desc": "电池温度高于阈值时提醒，高温会加速电池老化",
+    "settings.tempLow.name": "低温提醒",
+    "settings.tempLow.desc": "电池温度低于阈值时提醒，低温下充电可能损伤电池",
     "close.ask": "每次询问",
     "close.tray": "最小化到托盘",
     "close.exit": "退出应用",
@@ -188,11 +192,15 @@ const translations = {
     "settings.silent.desc": "Start hidden and keep running in the tray",
     "settings.close.name": "Close Button",
     "settings.close.desc": "What happens when you click the window close button",
-    "settings.reminders.desc": "Show system notifications at battery thresholds. Software only, works on any device, and does not change charging behavior.",
+    "settings.reminders.desc": "Show system notifications at battery thresholds and, when sensors are available, temperature thresholds. Software only and does not change charging behavior.",
     "settings.low.name": "Low Battery Reminder",
     "settings.low.desc": "Notify when discharging below the threshold",
     "settings.high.name": "High Battery Reminder",
     "settings.high.desc": "Notify when charging above the threshold",
+    "settings.tempHigh.name": "High Temperature Reminder",
+    "settings.tempHigh.desc": "Notify when battery temperature rises above the threshold; heat accelerates aging",
+    "settings.tempLow.name": "Low Temperature Reminder",
+    "settings.tempLow.desc": "Notify when battery temperature drops below the threshold; charging while cold can damage the battery",
     "close.ask": "Ask Every Time",
     "close.tray": "Minimize to Tray",
     "close.exit": "Quit App",
@@ -1445,6 +1453,10 @@ let settings = {
   remind_charge_at: 30,
   remind_unplug: true,
   remind_unplug_at: 80,
+  remind_temp_high: true,
+  remind_temp_high_at: 45,
+  remind_temp_low: true,
+  remind_temp_low_at: 5,
 };
 const closeActionLabel = (value) =>
   ({
@@ -1489,6 +1501,10 @@ async function loadSettings() {
     byId("setRemindChargeAt").value = settings.remind_charge_at;
     byId("setRemindUnplug").checked = settings.remind_unplug;
     byId("setRemindUnplugAt").value = settings.remind_unplug_at;
+    byId("setRemindTempHigh").checked = settings.remind_temp_high;
+    byId("setRemindTempHighAt").value = settings.remind_temp_high_at;
+    byId("setRemindTempLow").checked = settings.remind_temp_low;
+    byId("setRemindTempLowAt").value = settings.remind_temp_low_at;
     syncReminderInputs();
   } catch (err) {
     console.error(err);
@@ -1499,6 +1515,13 @@ async function loadSettings() {
 function syncReminderInputs() {
   byId("setRemindChargeAt").disabled = !settings.remind_charge;
   byId("setRemindUnplugAt").disabled = !settings.remind_unplug;
+  const highTempInput = byId("setRemindTempHighAt");
+  const lowTempInput = byId("setRemindTempLowAt");
+  highTempInput.disabled = !settings.remind_temp_high;
+  lowTempInput.disabled = !settings.remind_temp_low;
+  // 两个阈值至少相隔 2°C，给 1°C 回差留出空间，避免相反提醒同时处于触发状态。
+  highTempInput.min = Math.max(20, Number(settings.remind_temp_low_at) + 2);
+  lowTempInput.max = Math.min(20, Number(settings.remind_temp_high_at) - 2);
 }
 
 async function persistSettings() {
@@ -1541,6 +1564,7 @@ function commitThreshold(inputId, key, minValue, maxValue) {
   nextValue = Math.min(maxValue, Math.max(minValue, nextValue));
   input.value = nextValue;
   settings[key] = nextValue;
+  if (key === "remind_temp_high_at" || key === "remind_temp_low_at") syncReminderInputs();
   const battery = selectedBattery();
   if (battery) renderPowerPrediction(battery);
   persistSettings();
@@ -1556,11 +1580,37 @@ byId("setRemindUnplug").addEventListener("change", (e) => {
   syncReminderInputs();
   persistSettings();
 });
+byId("setRemindTempHigh").addEventListener("change", (e) => {
+  settings.remind_temp_high = e.target.checked;
+  syncReminderInputs();
+  persistSettings();
+});
+byId("setRemindTempLow").addEventListener("change", (e) => {
+  settings.remind_temp_low = e.target.checked;
+  syncReminderInputs();
+  persistSettings();
+});
 byId("setRemindChargeAt").addEventListener("change", () =>
   commitThreshold("setRemindChargeAt", "remind_charge_at", 1, 99)
 );
 byId("setRemindUnplugAt").addEventListener("change", () =>
   commitThreshold("setRemindUnplugAt", "remind_unplug_at", 1, 100)
+);
+byId("setRemindTempHighAt").addEventListener("change", () =>
+  commitThreshold(
+    "setRemindTempHighAt",
+    "remind_temp_high_at",
+    Math.max(20, Number(settings.remind_temp_low_at) + 2),
+    80
+  )
+);
+byId("setRemindTempLowAt").addEventListener("change", () =>
+  commitThreshold(
+    "setRemindTempLowAt",
+    "remind_temp_low_at",
+    -10,
+    Math.min(20, Number(settings.remind_temp_high_at) - 2)
+  )
 );
 byId("setCloseActionButton").addEventListener("click", () => {
   setCloseActionDropdownOpen(!byId("closeActionDropdown").classList.contains("open"));

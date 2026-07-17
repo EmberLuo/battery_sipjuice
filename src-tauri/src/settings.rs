@@ -43,6 +43,14 @@ pub struct Settings {
     pub remind_unplug: bool,
     /// 高电量提醒阈值 (%)。
     pub remind_unplug_at: i64,
+    /// 高温提醒：电池温度 ≥ remind_temp_high_at 时提醒。
+    pub remind_temp_high: bool,
+    /// 高温提醒阈值 (°C)。
+    pub remind_temp_high_at: i64,
+    /// 低温提醒：电池温度 ≤ remind_temp_low_at 时提醒。
+    pub remind_temp_low: bool,
+    /// 低温提醒阈值 (°C)。
+    pub remind_temp_low_at: i64,
 }
 
 impl Default for Settings {
@@ -58,7 +66,24 @@ impl Default for Settings {
             remind_charge_at: 30,
             remind_unplug: true,
             remind_unplug_at: 80,
+            remind_temp_high: true,
+            remind_temp_high_at: 45,
+            remind_temp_low: true,
+            remind_temp_low_at: 5,
         }
+    }
+}
+
+impl Settings {
+    /// 约束温度阈值到 UI 支持范围，并为 1°C 回差保留至少 2°C 的阈值间隔。
+    /// 该层校验同时覆盖旧配置、手工修改配置以及绕过前端的命令调用。
+    fn normalized(mut self) -> Self {
+        self.remind_temp_high_at = self.remind_temp_high_at.clamp(20, 80);
+        self.remind_temp_low_at = self.remind_temp_low_at.clamp(-10, 20);
+        if self.remind_temp_low_at > self.remind_temp_high_at - 2 {
+            self.remind_temp_low_at = self.remind_temp_high_at - 2;
+        }
+        self
     }
 }
 
@@ -74,7 +99,8 @@ impl SettingsStore {
         let settings = std::fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .normalized();
         SettingsStore {
             path,
             inner: Mutex::new(settings),
@@ -88,6 +114,7 @@ impl SettingsStore {
 
     /// 整体替换并写盘；持久化失败会返回错误。
     pub fn set(&self, settings: Settings) -> Result<(), String> {
+        let settings = settings.normalized();
         // 持锁仅用于更新内存副本并序列化，写盘前释放。
         let json = {
             let mut guard = self.inner.lock().map_err(|_| "设置锁中毒".to_string())?;
@@ -95,5 +122,41 @@ impl SettingsStore {
             serde_json::to_string_pretty(&*guard).map_err(|e| e.to_string())?
         }; // <- 锁在此释放
         std::fs::write(&self.path, json).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn older_settings_receive_temperature_defaults() {
+        let settings = serde_json::from_str::<Settings>(r#"{"language":"en-US"}"#)
+            .expect("旧设置应能反序列化");
+        assert!(settings.remind_temp_high);
+        assert_eq!(settings.remind_temp_high_at, 45);
+        assert!(settings.remind_temp_low);
+        assert_eq!(settings.remind_temp_low_at, 5);
+    }
+
+    #[test]
+    fn normalization_prevents_overlapping_temperature_thresholds() {
+        let settings = Settings {
+            remind_temp_high_at: 20,
+            remind_temp_low_at: 20,
+            ..Settings::default()
+        }
+        .normalized();
+        assert_eq!(settings.remind_temp_high_at, 20);
+        assert_eq!(settings.remind_temp_low_at, 18);
+
+        let settings = Settings {
+            remind_temp_high_at: 200,
+            remind_temp_low_at: -100,
+            ..Settings::default()
+        }
+        .normalized();
+        assert_eq!(settings.remind_temp_high_at, 80);
+        assert_eq!(settings.remind_temp_low_at, -10);
     }
 }

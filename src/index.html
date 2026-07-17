@@ -306,7 +306,7 @@
         </div>
 
         <h3 class="section-h" data-i18n="section.reminders">电池养护提醒</h3>
-        <p class="section-sub" data-i18n="settings.reminders.desc">按电量阈值弹出系统通知，纯软件实现，任何设备都能用，不改变充电行为。</p>
+        <p class="section-sub" data-i18n="settings.reminders.desc">按电量和设备支持的温度阈值弹出系统通知，纯软件实现，不改变充电行为。</p>
         <div class="settings-card">
           <div class="setting-row">
             <div class="setting-text">
@@ -336,6 +336,38 @@
               </div>
               <label class="switch">
                 <input type="checkbox" id="setRemindUnplug" checked />
+                <span class="slider-sw"></span>
+              </label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name" data-i18n="settings.tempHigh.name">高温提醒</div>
+              <div class="setting-desc" data-i18n="settings.tempHigh.desc">电池温度高于阈值时提醒，高温会加速电池老化</div>
+            </div>
+            <div class="setting-trailing">
+              <div class="threshold-input">
+                <input type="number" id="setRemindTempHighAt" min="20" max="80" value="45" />
+                <span>°C</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setRemindTempHigh" checked />
+                <span class="slider-sw"></span>
+              </label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name" data-i18n="settings.tempLow.name">低温提醒</div>
+              <div class="setting-desc" data-i18n="settings.tempLow.desc">电池温度低于阈值时提醒，低温下充电可能损伤电池</div>
+            </div>
+            <div class="setting-trailing">
+              <div class="threshold-input">
+                <input type="number" id="setRemindTempLowAt" min="-10" max="20" value="5" />
+                <span>°C</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setRemindTempLow" checked />
                 <span class="slider-sw"></span>
               </label>
             </div>
