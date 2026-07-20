@@ -31,6 +31,12 @@
       "deb",
       "appimage"
     ],
+    "copyright": "Copyright © 2026 EmberLuo",
+    "license": "Apache-2.0",
+    "licenseFile": "../LICENSE",
+    "resources": {
+      "../NOTICE": "NOTICE"
+    },
     "icon": [
       "icons/16x16.png",
       "icons/24x24.png",

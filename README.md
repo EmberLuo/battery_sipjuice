@@ -1,152 +1,112 @@
-# Battery SipJuice
+<p align="center">
+  <img src="src/app-icon.svg" width="112" alt="Battery SipJuice icon">
+</p>
 
-Battery SipJuice 是一个面向 Linux 笔记本和平板的本机电池监控与电源状态工具。它使用 Tauri v2 + Rust + 原生 Web 前端构建，主要从 Linux `sysfs` / `procfs` 读取电池、电源输入和进程 CPU 时间数据。
+<h1 align="center">Battery SipJuice</h1>
 
-> **声明**
->
-> 这个项目首先是我给自己设备使用的小工具。它是开源的，也欢迎参考、试用和改进；但它不是一个已经覆盖大量硬件的通用商业软件。不同 Linux 发行版、内核、固件和硬件暴露的电源接口差异很大，请把它当作一个仍在演进中的个人开源项目使用。
+<p align="center">
+  A local-first battery monitor and care utility for Linux laptops and tablets.
+</p>
+
+<p align="center">
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/EmberLuo/battery_sipjuice/actions/workflows/linux-x64-packages.yml"><img src="https://github.com/EmberLuo/battery_sipjuice/actions/workflows/linux-x64-packages.yml/badge.svg" alt="Linux package build"></a>
+  <img src="https://img.shields.io/badge/platform-Linux-FCC624?logo=linux&logoColor=black" alt="Linux">
+  <img src="https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white" alt="Tauri v2">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2ea44f" alt="Apache License 2.0"></a>
+</p>
+
+## Screenshots
+
+<p align="center"><sub>Rendered from the current source tree with isolated demo data.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/overview.png" width="900" alt="Battery SipJuice overview">
+</p>
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/monitor.png" alt="Battery monitoring history"></td>
+    <td><img src="docs/screenshots/sessions.png" alt="Charging session history"></td>
+  </tr>
+  <tr>
+    <td align="center">Monitoring history</td>
+    <td align="center">Charging sessions</td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/health.png" width="900" alt="Long-term battery health">
+</p>
+
+## About
+
+Battery SipJuice is a Linux-only desktop utility for understanding battery condition, charging behavior, and power usage over time. It reads standard and vendor-provided data from Linux `power_supply` and `procfs`, then presents it through a lightweight Tauri interface.
+
+All monitoring data stays on the local machine. Battery SipJuice does not require an account, upload telemetry, or modify firmware charging policies.
+
+> Available metrics depend on the Linux kernel, firmware, and drivers exposed by each device. Missing hardware readings are shown as unavailable instead of being guessed.
 
 ## Features
 
-- **电池概览**：电量、充放电状态、剩余使用时间、实时功率、温度。
-- **多电池支持**：自动枚举所有在位电池，可切换查看每块电池的概览、健康与独立历史。
-- **电池健康**：实际满电容量、设计容量、容量损耗、循环次数、SOH、内阻、电池技术。
-- **充电会话历史**：自动切分每次充电，记录起止时间、充入比例、Wh/mAh、平均与峰值功率、峰值温度，并与上次充电对比。
-- **长期健康趋势**：每天和完整充电结束后保存健康快照，通过平滑趋势和每周期磨损观察长期衰减。
-- **历史曲线**：支持电池侧和输入侧切换，查看电量、功率、电压、电流、温度等趋势。
-- **输入电源监测**：显示系统暴露的 USB-C、AC、无线充等输入源状态、功率、电压、电流。
-- **输入电量估算**：按输入功率随时间积分，估算当前窗口内的输入电能。
-- **应用耗电估算**：按进程 CPU 时间占比分配电池功率，估算应用当前功率和本次运行累计耗电。
-- **电池养护提醒**：低电量提醒、高电量拔电提醒，纯软件通知，不改写充电策略。
-- **桌面集成**：系统托盘、开机自启动、静默启动、关闭按钮行为设置、浅色/深色主题。
+- **Live battery monitoring** — charge level, status, remaining time, power, voltage, current, and temperature.
+- **Multi-battery support** — inspect each installed battery with independent history and health records.
+- **Seven-day history** — fixed-size, multi-resolution charts for battery and input power data without unbounded storage growth.
+- **Charging sessions** — automatically records charge range, duration, Wh/mAh estimates, power, temperature, and input-source metadata.
+- **Long-term health trends** — daily and post-session snapshots with a smoothed capacity-health curve and wear-per-cycle estimate.
+- **Power-source monitoring** — displays USB-C, mains, and wireless inputs exposed through Linux `power_supply`.
+- **Per-application power estimates** — attributes battery discharge power using process CPU-time share; useful for comparison, not hardware-accurate metering.
+- **Battery care reminders** — configurable notifications for low/high charge, high/low temperature, and sustained abnormal drain.
+- **Linux desktop integration** — system tray, launch at login, silent start, single-instance behavior, and configurable close actions.
+- **Personalized interface** — Chinese and English languages, light/dark/system themes, and selectable or system accent colors.
 
-## Platform Support
+## Build from Source
 
-当前目标平台是 Linux 桌面环境：
+### Requirements
 
-- 架构：`aarch64/arm64`、`x86_64/amd64`
-- 包格式：`.deb`、`.rpm`、AppImage
-- 主要依赖：WebKitGTK 4.1、Tauri v2、Rust、Node.js
+- Linux with WebKitGTK 4.1
+- [Rust](https://rustup.rs/)
+- Node.js and npm
 
-这个项目依赖 Linux 内核暴露的标准或半标准接口。支持情况不是由 CPU 架构单独决定，而是由设备是否提供对应的 `sysfs` 节点决定。
-
-## Data Sources
-
-Battery SipJuice 当前主要读取这些本机接口：
-
-- `/sys/class/power_supply/*`
-  - 电池容量、状态、电压、电流、功率、温度、健康信息
-  - USB-C、AC、无线充等输入源状态
-- `/proc`
-  - 进程 CPU 时间，用于应用耗电估算
-
-## Important Limits
-
-- **硬件兼容性不保证**：很多字段是否存在取决于内核、固件和驱动。
-- **输入侧只支持 `power_supply` 暴露的设备**：普通 USB 外设，例如 2.4G 接收器，只有在系统把它暴露为电源输入源时才会出现在输入侧曲线中。
-- **应用耗电不是硬件精确测量**：它是基于电池总功率和 CPU 时间占比的估算，不代表真实逐应用功耗计量。
-- **充入量受硬件限制**：输入端能量包含设备运行消耗；电池侧 Wh 与 mAh 更接近实际充入量，但仍取决于驱动是否提供对应读数。
-- **无电池主机可运行但功能会降级**：没有电池时，电池健康、剩余使用时间、应用耗电估算等功能可能为空；输入侧数据取决于主机是否暴露电源传感器。
-
-## Install From Source
-
-### System Dependencies
-
-Debian / Ubuntu 系发行版：
+On Debian or Ubuntu, install the native build dependencies with:
 
 ```bash
-sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
-  libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-  libsoup-3.0-dev libjavascriptcoregtk-4.1-dev patchelf rpm
+sudo apt update
+sudo apt install -y \
+  build-essential curl file libayatana-appindicator3-dev \
+  libjavascriptcoregtk-4.1-dev librsvg2-dev libsoup-3.0-dev \
+  libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf rpm wget
 ```
 
-还需要安装：
-
-- Rust toolchain: <https://rustup.rs/>
-- Node.js
-
-安装前端工具依赖：
+### Develop
 
 ```bash
+git clone https://github.com/EmberLuo/battery_sipjuice.git
+cd battery_sipjuice
 npm install
-```
-
-### Development
-
-```bash
 npm run dev
 ```
 
-### Build
-
-构建 Tauri 默认目标：
+### Package
 
 ```bash
 npm run build
 ```
 
-只构建当前机器架构的 Debian 包：
+The default build produces the bundle targets configured in Tauri (`.deb` and AppImage). Additional package commands are available:
 
-```bash
-npm run build:deb
-```
+| Command | Output |
+| --- | --- |
+| `npm run build:deb` | Debian package |
+| `npm run build:rpm` | RPM package |
+| `npm run build:linux:packages` | Debian and RPM packages |
+| `npm run build:linux:x64` | x86_64 Debian and RPM packages |
 
-只构建当前机器架构的 RPM 包：
-
-```bash
-npm run build:rpm
-```
-
-同时构建当前机器架构的 `.deb` 和 `.rpm`：
-
-```bash
-npm run build:linux:packages
-```
-
-在 x86_64 Linux 构建机上生成 x64 `.deb` / `.rpm`：
-
-```bash
-npm run build:linux:x64
-```
-
-Tauri 的 Linux 包是原生构建产物。ARM64 机器适合构建 ARM64 包；x64 包建议在 x86_64 Linux 构建机或 CI 上构建。仓库包含 GitHub Actions 工作流，可用于生成 x64 deb/rpm artifact。
-
-## Versioning
-
-项目内有多个生态的版本字段。推荐使用脚本同步更新：
-
-```bash
-npm run version:bump -- 0.4.1
-```
-
-这个命令会同步 `package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 和 `src-tauri/tauri.conf.json`。
-
-## Development Notes
-
-- 前端是无框架的 HTML/CSS/JavaScript，Tauri 直接加载 `src/`。
-- 后端命令、采样和系统接口读取在 `src-tauri/src/`。
-- 历史数据按电池和输入源分别使用固定大小的 RRD 风格归档，避免单份历史无限增长；旧单电池历史会自动迁移。
-- 电池历史和输入侧历史分开保存，已有电池历史文件保持兼容。
-- 充电会话、进行中会话和长期健康快照单独保存在应用数据目录的 `insights.json`；会话最多保留 1000 条，健康快照最多保留 5000 条。
-
-## Contributing
-
-这个项目仍以个人需求为主，但欢迎提交 issue、建议和补丁。比较有价值的方向包括：
-
-- 补充不同 Linux 设备上的 `power_supply` 兼容性信息。
-- 改进无电池主机、扩展坞、USB-C 供电和多电池设备的展示。
-- 改进应用耗电估算的分组和命名。
-- 补充截图、文档和发行包说明。
-
-提交改动前建议运行：
-
-```bash
-node --check src/main.js
-cd src-tauri
-cargo test
-cargo clippy -- -D warnings
-```
+Build artifacts are normally written under `src-tauri/target/release/bundle/`; explicitly targeted builds use `src-tauri/target/<target-triple>/release/bundle/`. Packaging commands regenerate all application PNG icons from `src/app-icon.svg` before compiling.
 
 ## License
 
-Battery SipJuice is licensed under the [MIT License](LICENSE).
+Battery SipJuice is released under the [Apache License 2.0](LICENSE). Redistributions must preserve the license, applicable copyright and attribution notices, and the project [NOTICE](NOTICE) as required by the license.

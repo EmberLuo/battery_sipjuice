@@ -2,8 +2,9 @@
 name = "battery-sipjuice"
 version = "0.4.1"
 description = "Battery SipJuice — Linux 电池监控与健康管理"
-authors = ["battery_sipjuice"]
-license = "MIT"
+authors = ["EmberLuo"]
+license = "Apache-2.0"
+repository = "https://github.com/EmberLuo/battery_sipjuice"
 edition = "2021"
 
 [lib]
