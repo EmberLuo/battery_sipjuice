@@ -633,7 +633,7 @@ impl HistoryStore {
     }
 
     /// 采样当前电池状态并并入归档。由后台线程定时调用。
-    pub fn tick(&self, batteries: &[battery::BatteryInfo]) {
+    pub fn tick(&self, batteries: &[battery::BatteryInfo], sources: &[power::PowerSource]) {
         let timestamp_ms = now_ms();
         let readings = battery_readings(batteries);
         let (wrote_battery, adopted_legacy) = if readings.is_empty() {
@@ -644,7 +644,7 @@ impl HistoryStore {
             (false, false)
         };
 
-        let readings = input_readings(&power::collect());
+        let readings = input_readings(sources);
         let wrote_input = if readings.is_empty() {
             false
         } else if let Ok(mut archives) = self.input_archives.lock() {

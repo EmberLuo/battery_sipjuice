@@ -1,6 +1,6 @@
 //! Tauri 命令层 — 暴露给前端的 IPC 接口。
 
-use crate::{app_power, battery, history, power, settings, system_accent};
+use crate::{app_power, battery, history, insights, power, settings, system_accent};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
@@ -90,6 +90,15 @@ pub fn get_app_power_report(
     store.latest()
 }
 
+/// 查询指定电池的充电会话和长期健康快照。
+#[tauri::command]
+pub fn get_battery_insights(
+    battery_id: Option<String>,
+    store: tauri::State<'_, insights::InsightsStore>,
+) -> insights::InsightsView {
+    store.view(battery_id.as_deref())
+}
+
 /// 隐藏主窗口（关闭按钮选择"最小化到托盘"时调用）。
 #[tauri::command]
 pub fn hide_window(app: AppHandle) {
@@ -100,6 +109,9 @@ pub fn hide_window(app: AppHandle) {
 
 /// 退出整个应用。
 #[tauri::command]
-pub fn quit_app(app: AppHandle) {
+pub fn quit_app(app: AppHandle, store: tauri::State<'_, insights::InsightsStore>) {
+    if let Err(error) = store.flush() {
+        eprintln!("insights: 退出前保存失败: {error}");
+    }
     app.exit(0);
 }

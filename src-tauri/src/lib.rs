@@ -4,6 +4,7 @@ mod app_power;
 mod battery;
 mod commands;
 mod history;
+mod insights;
 mod power;
 mod reminder;
 mod settings;
@@ -76,6 +77,8 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let hist = history::HistoryStore::load(data_dir.join("history.rdb"));
             app.manage(hist);
+            let insights = insights::InsightsStore::load(data_dir.join("insights.json"));
+            app.manage(insights);
 
             // 设置落在应用配置目录下的 settings.json。
             let cfg_dir = app.path().app_config_dir()?;
@@ -115,7 +118,12 @@ pub fn run() {
                         let enabled = light_item_for_menu.is_checked().unwrap_or(false);
                         apply_lightweight_mode(app, enabled);
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        if let Err(error) = app.state::<insights::InsightsStore>().flush() {
+                            eprintln!("insights: 退出前保存失败: {error}");
+                        }
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(move |tray, event| {
@@ -148,7 +156,13 @@ pub fn run() {
                         let action = handle.state::<settings::SettingsStore>().get().close_action;
                         match action {
                             // Exit: 不拦截，窗口关闭 → 应用退出。
-                            settings::CloseAction::Exit => {}
+                            settings::CloseAction::Exit => {
+                                if let Err(error) =
+                                    handle.state::<insights::InsightsStore>().flush()
+                                {
+                                    eprintln!("insights: 退出前保存失败: {error}");
+                                }
+                            }
                             settings::CloseAction::Tray => {
                                 api.prevent_close();
                                 if let Some(w) = handle.get_webview_window("main") {
@@ -176,7 +190,14 @@ pub fn run() {
                 let mut fired = reminder::Fired::default();
                 let mut snapshot = |h: &tauri::AppHandle| {
                     let batteries = battery::collect_all();
-                    h.state::<history::HistoryStore>().tick(&batteries);
+                    let sources = power::collect();
+                    h.state::<history::HistoryStore>()
+                        .tick(&batteries, &sources);
+                    h.state::<insights::InsightsStore>().tick(
+                        &batteries,
+                        &sources,
+                        history::now_ms(),
+                    );
                     let settings = h.state::<settings::SettingsStore>().get();
                     reminder::evaluate(h, &settings, &batteries, &mut fired);
                     let battery_power_w = batteries
@@ -202,6 +223,7 @@ pub fn run() {
             commands::get_system_accent_color,
             commands::save_settings,
             commands::get_app_power_report,
+            commands::get_battery_insights,
             commands::hide_window,
             commands::quit_app,
         ])

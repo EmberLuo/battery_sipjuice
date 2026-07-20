@@ -33,6 +33,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="overview" data-i18n="tab.overview">概览</button>
       <button class="tab" data-tab="monitor" data-i18n="tab.monitor">监测</button>
+      <button class="tab" data-tab="sessions" data-i18n="tab.sessions">充电记录</button>
       <button class="tab" data-tab="health" data-i18n="tab.health">健康</button>
       <button class="tab" data-tab="settings" data-i18n="tab.settings">设置</button>
     </nav>
@@ -124,6 +125,28 @@
           <div class="stat-card"><span class="stat-label" data-i18n="stat.driverSoh">驱动 SOH</span><span class="stat-value" id="healthStateOfHealth">—</span></div>
           <div class="stat-card"><span class="stat-label" data-i18n="stat.technology">电池技术</span><span class="stat-value" id="healthTechnology">—</span></div>
           <div class="stat-card"><span class="stat-label" data-i18n="stat.resistance">内阻</span><span class="stat-value" id="healthResistance">—</span></div>
+        </div>
+        <h3 class="section-h" data-i18n="health.trend.title">长期健康趋势</h3>
+        <p class="section-hint" data-i18n="health.trend.hint">每天及完整充电结束后记录健康快照；曲线使用 7 天滚动中位数减少读数波动。</p>
+        <div class="health-trend-card">
+          <div id="healthTrendSummary" class="health-trend-summary"></div>
+          <svg id="healthTrendChart" class="health-trend-chart" viewBox="0 0 720 220" preserveAspectRatio="none"></svg>
+          <p id="healthTrendEmpty" class="empty-hint" data-i18n="health.trend.empty">需要至少两条健康快照才能绘制趋势。</p>
+        </div>
+      </section>
+
+      <!-- 充电会话与会话对比 -->
+      <section class="panel" id="sessions">
+        <h3 class="section-h section-h-first" data-i18n="sessions.comparison.title">最近一次充电对比</h3>
+        <p class="section-hint" data-i18n="sessions.comparison.hint">将最近完成的充电会话与上一次会话比较。</p>
+        <div id="sessionComparison" class="session-comparison">
+          <p class="empty-hint" data-i18n="sessions.comparison.empty">至少需要两次完整充电会话。</p>
+        </div>
+
+        <h3 class="section-h" data-i18n="sessions.recent.title">充电会话</h3>
+        <p class="section-hint" data-i18n="sessions.recent.hint">输入端能量包含设备运行消耗；电池侧 Wh 与 mAh 更接近实际充入量。</p>
+        <div id="sessionList" class="session-list">
+          <p class="empty-hint" data-i18n="sessions.empty">还没有充电会话，下一次充电时会自动记录。</p>
         </div>
       </section>
 
