@@ -18,10 +18,29 @@
         </div>
       </div>
       <div class="topbar-actions">
-        <label class="battery-picker" id="batteryPicker" hidden>
-          <span data-i18n="battery.selector">电池</span>
-          <select id="batterySelect" aria-label="电池" data-i18n-aria="battery.selector"></select>
-        </label>
+        <div class="battery-picker" id="batteryPicker" hidden>
+          <span id="batteryPickerLabel" data-i18n="battery.selector">电池</span>
+          <div class="app-select" id="batterySelectDropdown">
+            <select id="batterySelect" hidden aria-hidden="true" tabindex="-1"></select>
+            <button
+              class="app-select-button"
+              id="batterySelectButton"
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-labelledby="batteryPickerLabel batterySelectValue"
+            >
+              <span class="app-select-value" id="batterySelectValue">—</span>
+              <span class="select-caret"></span>
+            </button>
+            <div
+              class="app-select-menu"
+              id="batterySelectMenu"
+              role="listbox"
+              aria-labelledby="batteryPickerLabel"
+            ></div>
+          </div>
+        </div>
         <div class="status-pill" id="statusPill">
           <span class="dot"></span>
           <span id="statusText">—</span>
@@ -174,10 +193,29 @@
               <button class="chip" data-metric="voltage">电池电压 V</button>
               <button class="chip" data-metric="current_ma">电池电流 mA</button>
             </div>
-            <label class="input-source-picker" id="inputSourcePicker" hidden>
-              <span data-i18n="chart.inputSource">输入来源</span>
-              <select id="inputSourceSelect" aria-label="输入来源" data-i18n-aria="chart.inputSource"></select>
-            </label>
+            <div class="input-source-picker" id="inputSourcePicker" hidden>
+              <span id="inputSourcePickerLabel" data-i18n="chart.inputSource">输入来源</span>
+              <div class="app-select" id="inputSourceSelectDropdown">
+                <select id="inputSourceSelect" hidden aria-hidden="true" tabindex="-1"></select>
+                <button
+                  class="app-select-button"
+                  id="inputSourceSelectButton"
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-labelledby="inputSourcePickerLabel inputSourceSelectValue"
+                >
+                  <span class="app-select-value" id="inputSourceSelectValue">—</span>
+                  <span class="select-caret"></span>
+                </button>
+                <div
+                  class="app-select-menu"
+                  id="inputSourceSelectMenu"
+                  role="listbox"
+                  aria-labelledby="inputSourcePickerLabel"
+                ></div>
+              </div>
+            </div>
             <div class="chip-row" id="rangeChips">
               <button class="chip range active" data-range="300000" data-i18n="range.5m">5 分</button>
               <button class="chip range" data-range="1800000" data-i18n="range.30m">30 分</button>

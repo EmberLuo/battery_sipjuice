@@ -401,7 +401,6 @@ const ACCENT_CSS_VARIABLES = [
   "--accent-active-border",
   "--accent-inset",
 ];
-const SYSTEM_ACCENT_REFRESH_MS = 30_000;
 
 function snapshotBatteries(snapshot = lastSnapshot) {
   return Array.isArray(snapshot?.batteries) ? snapshot.batteries : [];
@@ -416,6 +415,132 @@ function batteryLabel(battery) {
   const name = battery.model || battery.manufacturer || battery.device;
   return name === battery.device ? battery.device : `${name} · ${battery.device}`;
 }
+
+const APP_SELECT_CONFIGS = {
+  battery: {
+    selectId: "batterySelect",
+    dropdownId: "batterySelectDropdown",
+    buttonId: "batterySelectButton",
+    valueId: "batterySelectValue",
+    menuId: "batterySelectMenu",
+  },
+  inputSource: {
+    selectId: "inputSourceSelect",
+    dropdownId: "inputSourceSelectDropdown",
+    buttonId: "inputSourceSelectButton",
+    valueId: "inputSourceSelectValue",
+    menuId: "inputSourceSelectMenu",
+  },
+};
+
+function appSelectElements(name) {
+  const config = APP_SELECT_CONFIGS[name];
+  return {
+    select: byId(config.selectId),
+    dropdown: byId(config.dropdownId),
+    button: byId(config.buttonId),
+    value: byId(config.valueId),
+    menu: byId(config.menuId),
+  };
+}
+
+function setAppSelectOpen(name, open, focusSelected = false) {
+  Object.keys(APP_SELECT_CONFIGS).forEach((otherName) => {
+    const elements = appSelectElements(otherName);
+    const shouldOpen = otherName === name && open && !elements.button.disabled;
+    elements.dropdown.classList.toggle("open", shouldOpen);
+    elements.button.setAttribute("aria-expanded", String(shouldOpen));
+  });
+  if (!open || !focusSelected) return;
+  requestAnimationFrame(() => {
+    const { menu } = appSelectElements(name);
+    (menu.querySelector('[aria-selected="true"]') ?? menu.querySelector("button"))?.focus();
+  });
+}
+
+function syncAppSelect(name) {
+  const { select, button, value, menu } = appSelectElements(name);
+  const options = [...select.options];
+  const optionsSignature = JSON.stringify(options.map((option) => [option.value, option.textContent]));
+  if (menu.dataset.optionsSignature !== optionsSignature) {
+    menu.dataset.optionsSignature = optionsSignature;
+    menu.replaceChildren();
+    options.forEach((option, index) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.id = `${menu.id}Option${index}`;
+      item.setAttribute("role", "option");
+      item.dataset.value = option.value;
+      item.textContent = option.textContent;
+      item.title = option.textContent;
+      menu.appendChild(item);
+    });
+  }
+
+  const selected = options.find((option) => option.value === select.value) ?? options[0] ?? null;
+  value.textContent = selected?.textContent ?? "—";
+  button.title = selected?.textContent ?? "";
+  button.disabled = options.length === 0;
+  menu.querySelectorAll("[data-value]").forEach((item) => {
+    item.setAttribute("aria-selected", String(item.dataset.value === selected?.value));
+  });
+}
+
+function commitAppSelect(name, nextValue) {
+  const { select, button } = appSelectElements(name);
+  if (select.value !== nextValue) {
+    select.value = nextValue;
+    syncAppSelect(name);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  setAppSelectOpen(name, false);
+  button.focus();
+}
+
+function wireAppSelect(name) {
+  const { dropdown, button, menu } = appSelectElements(name);
+  button.addEventListener("click", () => {
+    setAppSelectOpen(name, !dropdown.classList.contains("open"));
+  });
+  button.addEventListener("keydown", (event) => {
+    if (!["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) return;
+    event.preventDefault();
+    setAppSelectOpen(name, true, true);
+  });
+  menu.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-value]");
+    if (item) commitAppSelect(name, item.dataset.value);
+  });
+  menu.addEventListener("keydown", (event) => {
+    const items = [...menu.querySelectorAll("[data-value]")];
+    const currentIndex = items.indexOf(document.activeElement);
+    let nextIndex = null;
+    if (event.key === "ArrowDown") nextIndex = Math.min(items.length - 1, currentIndex + 1);
+    else if (event.key === "ArrowUp") nextIndex = Math.max(0, currentIndex - 1);
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = items.length - 1;
+    else if (event.key === "Escape") {
+      event.preventDefault();
+      setAppSelectOpen(name, false);
+      button.focus();
+      return;
+    }
+    if (nextIndex == null) return;
+    event.preventDefault();
+    items[nextIndex]?.focus();
+  });
+}
+
+Object.keys(APP_SELECT_CONFIGS).forEach(wireAppSelect);
+document.addEventListener("click", (event) => {
+  const clickedInsideSelect = Object.keys(APP_SELECT_CONFIGS).some((name) =>
+    appSelectElements(name).dropdown.contains(event.target)
+  );
+  if (!clickedInsideSelect) Object.keys(APP_SELECT_CONFIGS).forEach((name) => setAppSelectOpen(name, false));
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") Object.keys(APP_SELECT_CONFIGS).forEach((name) => setAppSelectOpen(name, false));
+});
 
 // ---------- 充电会话与长期健康 ----------
 let insightsData = { sessions: [], health: [] };
@@ -753,7 +878,7 @@ function renderBatteryOptions(batteries = snapshotBatteries()) {
   const signature = batteries
     .map((battery) => `${battery.device}:${battery.model ?? ""}:${battery.manufacturer ?? ""}`)
     .join("|");
-  if (signature !== batteryOptionsSignature && document.activeElement !== select) {
+  if (signature !== batteryOptionsSignature) {
     batteryOptionsSignature = signature;
     select.replaceChildren();
     batteries.forEach((battery) => {
@@ -764,6 +889,7 @@ function renderBatteryOptions(batteries = snapshotBatteries()) {
     });
   }
   select.value = selectedBatteryId;
+  syncAppSelect("battery");
 }
 
 function capacityRingColor(capacity) {
@@ -1425,6 +1551,7 @@ function renderInputSourceOptions() {
   const picker = byId("inputSourcePicker");
   const select = byId("inputSourceSelect");
   picker.hidden = monitorState.sourceKind !== "input";
+  if (picker.hidden) setAppSelectOpen("inputSource", false);
 
   const signature =
     currentLanguage +
@@ -1433,7 +1560,7 @@ function renderInputSourceOptions() {
       .map((source) => `${source.kind}:${source.name}`)
       .sort()
       .join("|");
-  if (signature !== inputSourceOptionsSignature && document.activeElement !== select) {
+  if (signature !== inputSourceOptionsSignature) {
     inputSourceOptionsSignature = signature;
     select.replaceChildren();
 
@@ -1455,6 +1582,7 @@ function renderInputSourceOptions() {
   const hasSelected = [...select.options].some((option) => option.value === monitorState.inputSourceId);
   if (!hasSelected) monitorState.inputSourceId = "total";
   select.value = monitorState.inputSourceId;
+  syncAppSelect("inputSource");
 }
 
 function renderChartLegend() {
@@ -2066,6 +2194,6 @@ byId("closeQuit").addEventListener("click", () => {
 });
 
 loadSettings();
-setInterval(() => {
+window.addEventListener("focus", () => {
   if (settings.accent_color === "system") refreshSystemAccentColor();
-}, SYSTEM_ACCENT_REFRESH_MS);
+});
