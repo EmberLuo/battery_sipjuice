@@ -52,7 +52,7 @@ pub fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-/// 读取系统强调色。当前优先支持 GNOME/Ubuntu 的 org.gnome.desktop.interface accent-color。
+/// 读取系统强调色。优先使用 GTK 当前主题的真实选中色，gsettings 映射作为兜底。
 #[tauri::command]
 pub fn get_system_accent_color() -> Option<system_accent::SystemAccentColor> {
     system_accent::detect()
