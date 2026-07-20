@@ -45,7 +45,7 @@ const translations = {
     "settings.silent.desc": "启动时不显示窗口，仅在系统托盘运行",
     "settings.close.name": "关闭按钮行为",
     "settings.close.desc": "点击窗口关闭按钮(✕)时的动作",
-    "settings.reminders.desc": "按电量和设备支持的温度阈值弹出系统通知，纯软件实现，不改变充电行为。",
+    "settings.reminders.desc": "按电量、设备支持的温度和放电功率阈值弹出系统通知，纯软件实现，不改变充电行为。",
     "settings.low.name": "低电量提醒",
     "settings.low.desc": "放电时电量低于阈值，提醒接上电源",
     "settings.high.name": "高电量提醒",
@@ -54,6 +54,8 @@ const translations = {
     "settings.tempHigh.desc": "电池温度高于阈值时提醒，高温会加速电池老化",
     "settings.tempLow.name": "低温提醒",
     "settings.tempLow.desc": "电池温度低于阈值时提醒，低温下充电可能损伤电池",
+    "settings.drain.name": "异常耗电提醒",
+    "settings.drain.desc": "放电功率持续高于阈值时提醒，可能有应用异常耗电",
     "close.ask": "每次询问",
     "close.tray": "最小化到托盘",
     "close.exit": "退出应用",
@@ -192,7 +194,7 @@ const translations = {
     "settings.silent.desc": "Start hidden and keep running in the tray",
     "settings.close.name": "Close Button",
     "settings.close.desc": "What happens when you click the window close button",
-    "settings.reminders.desc": "Show system notifications at battery thresholds and, when sensors are available, temperature thresholds. Software only and does not change charging behavior.",
+    "settings.reminders.desc": "Show system notifications at battery, discharge power and, when sensors are available, temperature thresholds. Software only and does not change charging behavior.",
     "settings.low.name": "Low Battery Reminder",
     "settings.low.desc": "Notify when discharging below the threshold",
     "settings.high.name": "High Battery Reminder",
@@ -201,6 +203,8 @@ const translations = {
     "settings.tempHigh.desc": "Notify when battery temperature rises above the threshold; heat accelerates aging",
     "settings.tempLow.name": "Low Temperature Reminder",
     "settings.tempLow.desc": "Notify when battery temperature drops below the threshold; charging while cold can damage the battery",
+    "settings.drain.name": "Abnormal Drain Reminder",
+    "settings.drain.desc": "Notify when discharge power stays above the threshold; an app may be draining the battery",
     "close.ask": "Ask Every Time",
     "close.tray": "Minimize to Tray",
     "close.exit": "Quit App",
@@ -1457,6 +1461,8 @@ let settings = {
   remind_temp_high_at: 45,
   remind_temp_low: true,
   remind_temp_low_at: 5,
+  remind_drain: true,
+  remind_drain_at: 30,
 };
 const closeActionLabel = (value) =>
   ({
@@ -1505,6 +1511,8 @@ async function loadSettings() {
     byId("setRemindTempHighAt").value = settings.remind_temp_high_at;
     byId("setRemindTempLow").checked = settings.remind_temp_low;
     byId("setRemindTempLowAt").value = settings.remind_temp_low_at;
+    byId("setRemindDrain").checked = settings.remind_drain;
+    byId("setRemindDrainAt").value = settings.remind_drain_at;
     syncReminderInputs();
   } catch (err) {
     console.error(err);
@@ -1522,6 +1530,7 @@ function syncReminderInputs() {
   // 两个阈值至少相隔 2°C，给 1°C 回差留出空间，避免相反提醒同时处于触发状态。
   highTempInput.min = Math.max(20, Number(settings.remind_temp_low_at) + 2);
   lowTempInput.max = Math.min(20, Number(settings.remind_temp_high_at) - 2);
+  byId("setRemindDrainAt").disabled = !settings.remind_drain;
 }
 
 async function persistSettings() {
@@ -1590,6 +1599,11 @@ byId("setRemindTempLow").addEventListener("change", (e) => {
   syncReminderInputs();
   persistSettings();
 });
+byId("setRemindDrain").addEventListener("change", (e) => {
+  settings.remind_drain = e.target.checked;
+  syncReminderInputs();
+  persistSettings();
+});
 byId("setRemindChargeAt").addEventListener("change", () =>
   commitThreshold("setRemindChargeAt", "remind_charge_at", 1, 99)
 );
@@ -1611,6 +1625,9 @@ byId("setRemindTempLowAt").addEventListener("change", () =>
     -10,
     Math.min(20, Number(settings.remind_temp_high_at) - 2)
   )
+);
+byId("setRemindDrainAt").addEventListener("change", () =>
+  commitThreshold("setRemindDrainAt", "remind_drain_at", 5, 150)
 );
 byId("setCloseActionButton").addEventListener("click", () => {
   setCloseActionDropdownOpen(!byId("closeActionDropdown").classList.contains("open"));

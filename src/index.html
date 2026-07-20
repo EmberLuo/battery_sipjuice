@@ -306,7 +306,7 @@
         </div>
 
         <h3 class="section-h" data-i18n="section.reminders">电池养护提醒</h3>
-        <p class="section-sub" data-i18n="settings.reminders.desc">按电量和设备支持的温度阈值弹出系统通知，纯软件实现，不改变充电行为。</p>
+        <p class="section-sub" data-i18n="settings.reminders.desc">按电量、设备支持的温度和放电功率阈值弹出系统通知，纯软件实现，不改变充电行为。</p>
         <div class="settings-card">
           <div class="setting-row">
             <div class="setting-text">
@@ -368,6 +368,22 @@
               </div>
               <label class="switch">
                 <input type="checkbox" id="setRemindTempLow" checked />
+                <span class="slider-sw"></span>
+              </label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-text">
+              <div class="setting-name" data-i18n="settings.drain.name">异常耗电提醒</div>
+              <div class="setting-desc" data-i18n="settings.drain.desc">放电功率持续高于阈值时提醒，可能有应用异常耗电</div>
+            </div>
+            <div class="setting-trailing">
+              <div class="threshold-input">
+                <input type="number" id="setRemindDrainAt" min="5" max="150" value="30" />
+                <span>W</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setRemindDrain" checked />
                 <span class="slider-sw"></span>
               </label>
             </div>

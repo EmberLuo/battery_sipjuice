@@ -51,6 +51,10 @@ pub struct Settings {
     pub remind_temp_low: bool,
     /// 低温提醒阈值 (°C)。
     pub remind_temp_low_at: i64,
+    /// 异常耗电提醒：放电功率持续 ≥ remind_drain_at 时提醒。
+    pub remind_drain: bool,
+    /// 异常耗电提醒阈值 (W)。
+    pub remind_drain_at: i64,
 }
 
 impl Default for Settings {
@@ -70,6 +74,8 @@ impl Default for Settings {
             remind_temp_high_at: 45,
             remind_temp_low: true,
             remind_temp_low_at: 5,
+            remind_drain: true,
+            remind_drain_at: 30,
         }
     }
 }
@@ -83,6 +89,7 @@ impl Settings {
         if self.remind_temp_low_at > self.remind_temp_high_at - 2 {
             self.remind_temp_low_at = self.remind_temp_high_at - 2;
         }
+        self.remind_drain_at = self.remind_drain_at.clamp(5, 150);
         self
     }
 }
@@ -130,13 +137,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn older_settings_receive_temperature_defaults() {
+    fn older_settings_receive_new_reminder_defaults() {
         let settings = serde_json::from_str::<Settings>(r#"{"language":"en-US"}"#)
             .expect("旧设置应能反序列化");
         assert!(settings.remind_temp_high);
         assert_eq!(settings.remind_temp_high_at, 45);
         assert!(settings.remind_temp_low);
         assert_eq!(settings.remind_temp_low_at, 5);
+        assert!(settings.remind_drain);
+        assert_eq!(settings.remind_drain_at, 30);
     }
 
     #[test]
@@ -158,5 +167,19 @@ mod tests {
         .normalized();
         assert_eq!(settings.remind_temp_high_at, 80);
         assert_eq!(settings.remind_temp_low_at, -10);
+
+        let settings = Settings {
+            remind_drain_at: 999,
+            ..Settings::default()
+        }
+        .normalized();
+        assert_eq!(settings.remind_drain_at, 150);
+
+        let settings = Settings {
+            remind_drain_at: -1,
+            ..Settings::default()
+        }
+        .normalized();
+        assert_eq!(settings.remind_drain_at, 5);
     }
 }
