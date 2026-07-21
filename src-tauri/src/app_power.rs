@@ -11,7 +11,7 @@
 //!   满足 Tauri State 的 Send+Sync 要求，不存在高频竞争。
 
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
@@ -23,6 +23,9 @@ const TOP_APP_COUNT: usize = 8;
 /// 单应用 CPU tick 占比低于此比例视为噪声，不纳入当前功率展示。
 const MIN_CPU_SHARE: f64 = 0.005;
 const MIN_ENERGY_WH: f64 = 0.00001;
+/// 累计表只展示 Top N，无需为本次运行见过的每个进程名永久保留条目。
+/// 先保留当前活跃应用，再按累计耗电保留其余条目，给内存占用一个确定上限。
+const MAX_TRACKED_APPS: usize = 256;
 
 #[derive(Serialize, Clone)]
 pub struct AppPowerEstimate {
@@ -71,6 +74,19 @@ impl AppPowerStore {
             return;
         };
 
+        // 没有正在放电的电池时，不能继续向前端返回上一采样周期的瞬时排行。
+        // 累计耗电仍属于“本次运行”数据，留到下次放电时继续展示。
+        if battery_power_w.is_none() {
+            inner.latest.current_power.clear();
+            for app in &mut inner.latest.total_energy {
+                app.power_w = 0.0;
+                app.cpu_share = 0.0;
+                app.process_count = 0;
+            }
+            inner.prev = Some(snap);
+            return;
+        }
+
         if let (Some(prev), Some(power_w)) = (inner.prev.as_ref(), battery_power_w) {
             let total_delta = snap.total.saturating_sub(prev.total);
             let elapsed_ms = snap.timestamp_ms.saturating_sub(prev.timestamp_ms);
@@ -83,6 +99,12 @@ impl AppPowerStore {
                     entry.energy_wh += app.power_w * hours;
                     app.energy_wh = entry.energy_wh;
                 }
+
+                let active_names = current_power
+                    .iter()
+                    .map(|app| app.name.clone())
+                    .collect::<HashSet<_>>();
+                prune_energy_by_app(&mut inner.energy_by_app, &active_names);
 
                 let current_power_by_name = current_power
                     .iter()
@@ -126,6 +148,34 @@ impl AppPowerStore {
             .map(|i| i.latest.clone())
             .unwrap_or_default()
     }
+}
+
+fn prune_energy_by_app(
+    energy_by_app: &mut HashMap<String, EnergyAccumulator>,
+    active_names: &HashSet<String>,
+) {
+    if energy_by_app.len() <= MAX_TRACKED_APPS {
+        return;
+    }
+
+    let mut names = energy_by_app.keys().cloned().collect::<Vec<_>>();
+    names.sort_by(|a, b| {
+        let a_active = active_names.contains(a);
+        let b_active = active_names.contains(b);
+        b_active
+            .cmp(&a_active)
+            .then_with(|| {
+                let a_energy = energy_by_app.get(a).map_or(0.0, |entry| entry.energy_wh);
+                let b_energy = energy_by_app.get(b).map_or(0.0, |entry| entry.energy_wh);
+                b_energy.total_cmp(&a_energy)
+            })
+            .then_with(|| a.cmp(b))
+    });
+    let retained = names
+        .into_iter()
+        .take(MAX_TRACKED_APPS)
+        .collect::<HashSet<_>>();
+    energy_by_app.retain(|name, _| retained.contains(name));
 }
 
 #[derive(Default)]
@@ -253,7 +303,8 @@ fn normalize_app_group_name(raw: &str, cmdline: &[String], comm: Option<&str>) -
     let name = raw.trim();
     let lower = name.to_ascii_lowercase();
     match lower.as_str() {
-        "code" | "chrome_crashpad_handler" => "Code".to_string(),
+        "code" => "Code".to_string(),
+        "chrome_crashpad_handler" => "Chromium Crash Handler".to_string(),
         "battery-sipjuice" | "battery-sipjuic" => "Battery SipJuice".to_string(),
         "gnome-shell" => "GNOME Shell".to_string(),
         "gjs" if cmdline.iter().any(|arg| arg.contains("gnome-shell")) => "GNOME Shell".to_string(),
@@ -290,4 +341,69 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn estimate(name: &str) -> AppPowerEstimate {
+        AppPowerEstimate {
+            name: name.to_string(),
+            power_w: 1.0,
+            energy_wh: 1.0,
+            cpu_share: 0.1,
+            process_count: 1,
+        }
+    }
+
+    #[test]
+    fn energy_accumulators_are_bounded_and_keep_active_apps() {
+        let mut entries = (0..MAX_TRACKED_APPS + 40)
+            .map(|index| {
+                (
+                    format!("app-{index}"),
+                    EnergyAccumulator {
+                        energy_wh: index as f64,
+                    },
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        let active = HashSet::from(["app-0".to_string()]);
+
+        prune_energy_by_app(&mut entries, &active);
+
+        assert_eq!(entries.len(), MAX_TRACKED_APPS);
+        assert!(entries.contains_key("app-0"), "当前活跃应用应优先保留");
+        assert!(entries.contains_key(&format!("app-{}", MAX_TRACKED_APPS + 39)));
+        assert!(!entries.contains_key("app-1"));
+    }
+
+    #[test]
+    fn missing_battery_power_clears_only_current_ranking() {
+        let store = AppPowerStore::default();
+        {
+            let mut inner = store.inner.lock().unwrap();
+            inner.latest.total_energy = vec![estimate("Browser")];
+            inner.latest.current_power = vec![estimate("Browser")];
+        }
+
+        store.tick(None);
+
+        let latest = store.latest();
+        assert_eq!(latest.total_energy.len(), 1);
+        assert_eq!(latest.total_energy[0].power_w, 0.0);
+        assert_eq!(latest.total_energy[0].cpu_share, 0.0);
+        assert_eq!(latest.total_energy[0].process_count, 0);
+        assert!(latest.current_power.is_empty());
+    }
+
+    #[test]
+    fn chromium_crash_handler_is_not_attributed_to_code() {
+        assert_eq!(
+            normalize_app_group_name("chrome_crashpad_handler", &[], None),
+            "Chromium Crash Handler"
+        );
+        assert_eq!(normalize_app_group_name("code", &[], None), "Code");
+    }
 }
