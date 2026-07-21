@@ -71,6 +71,7 @@ const translations = {
     "prediction.title": "平均功率预测",
     "prediction.note": "按近 {window} 平均 {power} 估算，负载变化会让结果跟着变化。",
     "prediction.note.empty": "平均功率样本不足，暂时无法估算。",
+    "prediction.note.full": "电池已处于满电状态，无需估算。",
     "prediction.full": "预计充满",
     "prediction.high": "到达 {threshold}% 以上",
     "prediction.low": "低于 {threshold}% 以下",
@@ -249,6 +250,7 @@ const translations = {
     "prediction.title": "Average Power Forecast",
     "prediction.note": "Estimated from the last {window} average {power}. It will change as the load changes.",
     "prediction.note.empty": "Not enough average power samples yet, so no forecast is available.",
+    "prediction.note.full": "The battery is full, so no power forecast is needed.",
     "prediction.full": "Full",
     "prediction.high": "Above {threshold}%",
     "prediction.low": "Below {threshold}%",
@@ -1096,6 +1098,15 @@ function renderPowerPrediction(battery) {
     return;
   }
 
+  if (battery.status === "Full") {
+    setAllEmpty(translate("prediction.note.full"));
+    byId("predictionFull").textContent = statusLabel("Full");
+    if (Number(battery.capacity) >= highThreshold) {
+      byId("predictionHigh").textContent = translate("prediction.reached.high", { threshold: highThreshold });
+    }
+    return;
+  }
+
   const averagePowerW = averagePowerForStatus(battery);
   if (averagePowerW == null || fullEnergyWh(battery) == null) {
     setAllEmpty();
@@ -1121,9 +1132,6 @@ function renderPowerPrediction(battery) {
         ? translate("prediction.reached.low", { threshold: lowThreshold })
         : formatDuration(minutesForPercentDelta(battery, capacity - lowThreshold, averagePowerW));
     byId("predictionEmpty").textContent = formatDuration(remainingUseMinutes(battery));
-  } else if (battery.status === "Full") {
-    byId("predictionFull").textContent = statusLabel("Full");
-    byId("predictionHigh").textContent = translate("prediction.reached.high", { threshold: highThreshold });
   }
 }
 
