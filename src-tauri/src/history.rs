@@ -53,6 +53,20 @@ pub(crate) fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+fn write_atomically(path: &Path, bytes: &[u8], description: &str) -> bool {
+    let tmp = path.with_extension("rdb.tmp");
+    if let Err(error) = fs::write(&tmp, bytes) {
+        eprintln!("history: {description}写临时文件失败: {error}");
+        return false;
+    }
+    if let Err(error) = fs::rename(&tmp, path) {
+        eprintln!("history: {description} rename 失败: {error}");
+        let _ = fs::remove_file(&tmp);
+        return false;
+    }
+    true
+}
+
 /// 单个历史采样点 (查询输出)。
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Sample {
@@ -683,17 +697,7 @@ impl HistoryStore {
             };
             a.to_bytes()
         }; // 锁在此释放，再写盘
-        let tmp = self.path.with_extension("rdb.tmp");
-        if let Err(e) = fs::write(&tmp, &bytes) {
-            eprintln!("history: 落盘写临时文件失败: {e}");
-            return false;
-        }
-        if let Err(e) = fs::rename(&tmp, &self.path) {
-            eprintln!("history: 落盘 rename 失败: {e}");
-            let _ = fs::remove_file(&tmp);
-            return false;
-        }
-        true
+        write_atomically(&self.path, &bytes, "电池历史")
     }
 
     fn flush_input(&self) -> bool {
@@ -703,17 +707,7 @@ impl HistoryStore {
             };
             a.to_bytes()
         };
-        let tmp = self.input_path.with_extension("rdb.tmp");
-        if let Err(e) = fs::write(&tmp, &bytes) {
-            eprintln!("history: 输入历史写临时文件失败: {e}");
-            return false;
-        }
-        if let Err(e) = fs::rename(&tmp, &self.input_path) {
-            eprintln!("history: 输入历史 rename 失败: {e}");
-            let _ = fs::remove_file(&tmp);
-            return false;
-        }
-        true
+        write_atomically(&self.input_path, &bytes, "输入历史")
     }
 
     /// 查询最近 range_ms 内的样本，自动选分辨率并降采样到约 HISTORY_MAX_POINTS 点。
