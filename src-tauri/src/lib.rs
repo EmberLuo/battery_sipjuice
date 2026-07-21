@@ -103,9 +103,12 @@ pub fn run() {
                 .separator()
                 .item(&quit_item)
                 .build()?;
+            let tray_icon =
+                tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?;
             let light_item_for_menu = light_item.clone();
             let light_item_for_tray = light_item.clone();
-            let mut tray = TrayIconBuilder::with_id("main-tray")
+            let tray = TrayIconBuilder::with_id("main-tray")
+                .icon(tray_icon)
                 .tooltip("Battery SipJuice")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -138,9 +141,6 @@ pub fn run() {
                         show_main(tray.app_handle());
                     }
                 });
-            if let Some(icon) = app.default_window_icon().cloned() {
-                tray = tray.icon(icon);
-            }
             tray.build(app)?;
             app.manage(TrayMenuItems {
                 show: show_item,

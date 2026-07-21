@@ -2,8 +2,8 @@
   <defs>
     <linearGradient id="orange-surface" x1="8%" y1="5%" x2="92%" y2="95%">
       <stop offset="0" stop-color="#ff9c45"/>
-      <stop offset="0.5" stop-color="#ff7818"/>
-      <stop offset="1" stop-color="#e94b00"/>
+      <stop offset="0.5" stop-color="#ff6a00"/>
+      <stop offset="1" stop-color="#e04700"/>
     </linearGradient>
     <filter id="surface-shadow" x="-8%" y="-8%" width="116%" height="135%">
       <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#702400" flood-opacity="0.2"/>

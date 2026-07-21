@@ -1,6 +1,6 @@
 [package]
 name = "battery-sipjuice"
-version = "0.4.1"
+version = "0.4.2"
 description = "Battery SipJuice — Linux 电池监控与健康管理"
 authors = ["EmberLuo"]
 license = "Apache-2.0"
@@ -15,7 +15,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

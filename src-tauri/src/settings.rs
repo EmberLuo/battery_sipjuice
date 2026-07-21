@@ -26,7 +26,7 @@ pub struct Settings {
     pub language: String,
     /// 外观主题：system / light / dark。
     pub theme: String,
-    /// 主题强调色：blue / orange / system。
+    /// 主题强调色：system / orange / blue。
     pub accent_color: String,
     /// 开机自启动。
     pub autostart: bool,
@@ -62,7 +62,7 @@ impl Default for Settings {
         Settings {
             language: "zh-CN".to_string(),
             theme: "system".to_string(),
-            accent_color: "orange".to_string(),
+            accent_color: "system".to_string(),
             autostart: false,
             silent_start: false,
             close_action: CloseAction::Ask,
@@ -146,6 +146,7 @@ mod tests {
         assert_eq!(settings.remind_temp_low_at, 5);
         assert!(settings.remind_drain);
         assert_eq!(settings.remind_drain_at, 30);
+        assert_eq!(settings.accent_color, "system");
     }
 
     #[test]

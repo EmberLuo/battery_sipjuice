@@ -33,11 +33,11 @@ const translations = {
     "theme.dark": "深色",
     "theme.dark.sub": "低亮度",
     "settings.accent.name": "主题颜色",
-    "settings.accent.desc": "选择蓝色、橙色或跟随系统强调色",
+    "settings.accent.desc": "选择跟随系统、橙色或蓝色强调色",
     "accent.blue": "蓝色",
-    "accent.blue.sub": "原配色",
+    "accent.blue.sub": "湛蓝",
     "accent.orange": "橙色",
-    "accent.orange.sub": "小米橙",
+    "accent.orange.sub": "熔岩橙",
     "accent.system": "跟随系统",
     "accent.system.sub": "系统强调色",
     "settings.autostart.name": "开机自启动",
@@ -211,11 +211,11 @@ const translations = {
     "theme.dark": "Dark",
     "theme.dark.sub": "Low light",
     "settings.accent.name": "Theme Color",
-    "settings.accent.desc": "Choose blue, orange, or the system accent color",
+    "settings.accent.desc": "Follow the system, or choose orange or blue",
     "accent.blue": "Blue",
-    "accent.blue.sub": "Original",
+    "accent.blue.sub": "Vivid blue",
     "accent.orange": "Orange",
-    "accent.orange.sub": "Xiaomi orange",
+    "accent.orange.sub": "Lava orange",
     "accent.system": "Follow System",
     "accent.system.sub": "System accent",
     "settings.autostart.name": "Launch at Login",
@@ -391,7 +391,7 @@ const formatNumber = (value, decimals = 0) =>
   value == null || isNaN(value) ? "—" : Number(value).toFixed(decimals);
 const formatValueWithUnit = (quantity, decimals = 0) =>
   quantity ? `${formatNumber(quantity.value, decimals)} ${quantity.unit}` : "—";
-const ACCENT_COLOR_VALUES = ["blue", "orange", "system"];
+const ACCENT_COLOR_VALUES = ["system", "orange", "blue"];
 const ACCENT_CSS_VARIABLES = [
   "--accent",
   "--accent-strong",
@@ -899,8 +899,8 @@ function capacityRingColor(capacity) {
 }
 
 function normalizeAccentColor(accentColor) {
-  if (accentColor === "default") return "orange";
-  return ACCENT_COLOR_VALUES.includes(accentColor) ? accentColor : "orange";
+  if (accentColor === "default") return "system";
+  return ACCENT_COLOR_VALUES.includes(accentColor) ? accentColor : "system";
 }
 
 function hexToRgb(hex) {
@@ -1968,7 +1968,7 @@ loadAppVersion();
 let settings = {
   language: "zh-CN",
   theme: "system",
-  accent_color: "orange",
+  accent_color: "system",
   autostart: false,
   silent_start: false,
   close_action: "ask",
