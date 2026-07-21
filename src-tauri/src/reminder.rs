@@ -40,6 +40,35 @@ pub struct Fired {
     drain_samples: HashMap<String, VecDeque<(u64, f64)>>,
 }
 
+/// 更新电量提醒的边沿状态，返回本次是否需要发送“拔电源”和“充电”通知。
+/// 不处于对应的充/放电状态时立即复位，避免恰好停在阈值时保留旧边沿。
+fn update_level_edges(
+    s: &Settings,
+    device: &str,
+    status: Option<&str>,
+    capacity: i64,
+    fired: &mut Fired,
+) -> (bool, bool) {
+    let plugged = matches!(status, Some("Charging") | Some("Full"));
+    let discharging = status == Some("Discharging");
+
+    let unplug = if s.remind_unplug && plugged && capacity >= s.remind_unplug_at {
+        fired.unplug.insert(device.to_string())
+    } else {
+        fired.unplug.remove(device);
+        false
+    };
+
+    let charge = if s.remind_charge && discharging && capacity <= s.remind_charge_at {
+        fired.charge.insert(device.to_string())
+    } else {
+        fired.charge.remove(device);
+        false
+    };
+
+    (unplug, charge)
+}
+
 /// 读取当前电量/状态，按设置决定是否弹通知。后台采样线程每次 tick 调用。
 pub fn evaluate(
     app: &AppHandle,
@@ -110,28 +139,20 @@ pub fn evaluate(
         };
 
         if let Some(capacity) = battery.capacity {
-            let status = battery.status.as_deref();
-            let plugged = matches!(status, Some("Charging") | Some("Full"));
-            let discharging = status == Some("Discharging");
-
-            // 高电量 → 提醒拔电源(仅充电/满电时有意义)。
-            if s.remind_unplug && plugged && capacity >= s.remind_unplug_at {
-                if fired.unplug.insert(battery.device.clone()) {
-                    let (title, body) = high_battery_text(&s.language, &label, capacity);
-                    notify(app, &title, &body);
-                }
-            } else if discharging || capacity < s.remind_unplug_at {
-                fired.unplug.remove(&battery.device);
+            let (unplug, charge) = update_level_edges(
+                s,
+                &battery.device,
+                battery.status.as_deref(),
+                capacity,
+                fired,
+            );
+            if unplug {
+                let (title, body) = high_battery_text(&s.language, &label, capacity);
+                notify(app, &title, &body);
             }
-
-            // 低电量 → 提醒充电(仅放电时有意义)。
-            if s.remind_charge && discharging && capacity <= s.remind_charge_at {
-                if fired.charge.insert(battery.device.clone()) {
-                    let (title, body) = low_battery_text(&s.language, &label, capacity);
-                    notify(app, &title, &body);
-                }
-            } else if plugged || capacity > s.remind_charge_at {
-                fired.charge.remove(&battery.device);
+            if charge {
+                let (title, body) = low_battery_text(&s.language, &label, capacity);
+                notify(app, &title, &body);
             }
         } else {
             // 电量字段暂时不可用时不保留旧边沿状态；温度提醒仍独立执行。
@@ -380,6 +401,66 @@ mod tests {
         let after_reset =
             temperature_notifications(&settings, "BAT0", Some(45.0), "BAT0", &mut fired);
         assert_eq!(after_reset.len(), 1, "回落超过 1°C 后应允许再次触发");
+    }
+
+    #[test]
+    fn level_edges_reset_in_inactive_status_at_exact_threshold() {
+        let settings = Settings::default();
+        let mut fired = Fired::default();
+
+        assert_eq!(
+            update_level_edges(
+                &settings,
+                "BAT0",
+                Some("Charging"),
+                settings.remind_unplug_at,
+                &mut fired,
+            ),
+            (true, false)
+        );
+        assert_eq!(
+            update_level_edges(
+                &settings,
+                "BAT0",
+                Some("Not charging"),
+                settings.remind_unplug_at,
+                &mut fired,
+            ),
+            (false, false)
+        );
+        assert!(!fired.unplug.contains("BAT0"));
+        assert!(
+            update_level_edges(
+                &settings,
+                "BAT0",
+                Some("Charging"),
+                settings.remind_unplug_at,
+                &mut fired,
+            )
+            .0
+        );
+
+        assert!(
+            update_level_edges(
+                &settings,
+                "BAT1",
+                Some("Discharging"),
+                settings.remind_charge_at,
+                &mut fired,
+            )
+            .1
+        );
+        assert_eq!(
+            update_level_edges(
+                &settings,
+                "BAT1",
+                Some("Not charging"),
+                settings.remind_charge_at,
+                &mut fired,
+            ),
+            (false, false)
+        );
+        assert!(!fired.charge.contains("BAT1"));
     }
 
     #[test]
