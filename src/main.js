@@ -431,6 +431,13 @@ const APP_SELECT_CONFIGS = {
     valueId: "inputSourceSelectValue",
     menuId: "inputSourceSelectMenu",
   },
+  closeAction: {
+    selectId: "setCloseAction",
+    dropdownId: "closeActionDropdown",
+    buttonId: "setCloseActionButton",
+    valueId: "setCloseActionValue",
+    menuId: "setCloseActionMenu",
+  },
 };
 
 function appSelectElements(name) {
@@ -531,6 +538,7 @@ function wireAppSelect(name) {
   });
 }
 
+syncAppSelect("closeAction");
 Object.keys(APP_SELECT_CONFIGS).forEach(wireAppSelect);
 document.addEventListener("click", (event) => {
   const clickedInsideSelect = Object.keys(APP_SELECT_CONFIGS).some((name) =>
@@ -1990,20 +1998,11 @@ const closeActionLabel = (value) =>
     exit: translate("close.exit"),
   }[value]);
 
-function setCloseActionDropdownOpen(open) {
-  byId("closeActionDropdown").classList.toggle("open", open);
-  byId("setCloseActionButton").setAttribute("aria-expanded", String(open));
-}
-
 function setCloseActionValue(value, shouldPersist = false) {
   const next = closeActionLabel(value) ? value : "ask";
   settings.close_action = next;
   byId("setCloseAction").value = next;
-  byId("setCloseActionLabel").textContent = closeActionLabel(next);
-  document.querySelectorAll("#setCloseActionMenu [data-value]").forEach((item) => {
-    item.setAttribute("aria-selected", String(item.dataset.value === next));
-    item.textContent = closeActionLabel(item.dataset.value);
-  });
+  syncAppSelect("closeAction");
   if (shouldPersist) persistSettings();
 }
 
@@ -2148,20 +2147,8 @@ byId("setRemindTempLowAt").addEventListener("change", () =>
 byId("setRemindDrainAt").addEventListener("change", () =>
   commitThreshold("setRemindDrainAt", "remind_drain_at", 5, 150)
 );
-byId("setCloseActionButton").addEventListener("click", () => {
-  setCloseActionDropdownOpen(!byId("closeActionDropdown").classList.contains("open"));
-});
-byId("setCloseActionMenu").addEventListener("click", (e) => {
-  const item = e.target.closest("[data-value]");
-  if (!item) return;
-  setCloseActionValue(item.dataset.value, true);
-  setCloseActionDropdownOpen(false);
-});
-document.addEventListener("click", (e) => {
-  if (!byId("closeActionDropdown").contains(e.target)) setCloseActionDropdownOpen(false);
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") setCloseActionDropdownOpen(false);
+byId("setCloseAction").addEventListener("change", (event) => {
+  setCloseActionValue(event.target.value, true);
 });
 
 // ---------- 关闭确认弹框 ----------

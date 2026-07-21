@@ -348,20 +348,20 @@
           </div>
           <div class="setting-row">
             <div class="setting-text">
-              <div class="setting-name" data-i18n="settings.close.name">关闭按钮行为</div>
+              <div class="setting-name" id="setCloseActionName" data-i18n="settings.close.name">关闭按钮行为</div>
               <div class="setting-desc" data-i18n="settings.close.desc">点击窗口关闭按钮(✕)时的动作</div>
             </div>
             <div class="setting-dropdown" id="closeActionDropdown">
-              <input type="hidden" id="setCloseAction" value="ask" />
-              <button class="setting-select" id="setCloseActionButton" type="button" aria-haspopup="listbox" aria-expanded="false">
-                <span id="setCloseActionLabel" data-i18n="close.ask">每次询问</span>
+              <select id="setCloseAction" hidden aria-hidden="true" tabindex="-1">
+                <option value="ask" data-i18n="close.ask">每次询问</option>
+                <option value="tray" data-i18n="close.tray">最小化到托盘</option>
+                <option value="exit" data-i18n="close.exit">退出应用</option>
+              </select>
+              <button class="setting-select" id="setCloseActionButton" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="setCloseActionName setCloseActionValue">
+                <span id="setCloseActionValue">每次询问</span>
                 <span class="select-caret"></span>
               </button>
-              <div class="setting-menu" id="setCloseActionMenu" role="listbox" aria-label="关闭按钮行为" data-i18n-aria="settings.close.name">
-                <button type="button" role="option" data-value="ask" aria-selected="true" data-i18n="close.ask">每次询问</button>
-                <button type="button" role="option" data-value="tray" aria-selected="false" data-i18n="close.tray">最小化到托盘</button>
-                <button type="button" role="option" data-value="exit" aria-selected="false" data-i18n="close.exit">退出应用</button>
-              </div>
+              <div class="setting-menu" id="setCloseActionMenu" role="listbox" aria-labelledby="setCloseActionName"></div>
             </div>
           </div>
         </div>
