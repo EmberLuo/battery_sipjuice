@@ -564,11 +564,7 @@ function batteryInsightId(battery) {
 
 function formatDurationMs(ms) {
   if (ms == null || !Number.isFinite(Number(ms))) return "—";
-  const totalMinutes = Math.max(0, Math.round(Number(ms) / 60_000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours <= 0) return `${minutes} ${translate("time.minute")}`;
-  return `${hours} ${translate("time.hour")} ${minutes} ${translate("time.minute")}`;
+  return formatDuration(Math.max(0, Math.round(Number(ms) / 60_000)), true);
 }
 
 function formatSessionTime(session) {
@@ -1016,10 +1012,11 @@ function sourceLabel(kind) {
   );
 }
 
-function formatDuration(minutes) {
-  if (!minutes || minutes <= 0) return "—";
-  const hours = Math.floor(minutes / 60);
-  const minutePart = minutes % 60;
+function formatDuration(minutes, allowZero = false) {
+  const totalMinutes = Number(minutes);
+  if (!Number.isFinite(totalMinutes) || totalMinutes < 0 || (!allowZero && totalMinutes === 0)) return "—";
+  const hours = Math.floor(totalMinutes / 60);
+  const minutePart = totalMinutes % 60;
   return hours > 0
     ? `${hours} ${translate("time.hour")} ${minutePart} ${translate("time.minute")}`
     : `${minutePart} ${translate("time.minute")}`;
