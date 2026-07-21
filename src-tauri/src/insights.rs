@@ -235,20 +235,27 @@ impl ActiveSession {
         self.inactive_samples = 0;
     }
 
-    fn finish(self, complete: bool, reason: &str) -> Option<ChargeSession> {
+    fn is_recordable(&self) -> bool {
         let duration_ms = self.last_active_ms.saturating_sub(self.start_ms);
-        if duration_ms < MIN_SESSION_MS || self.sample_count < 2 {
-            return None;
-        }
+        duration_ms >= MIN_SESSION_MS && self.sample_count >= 2
+    }
+
+    fn build_session(
+        &self,
+        complete: bool,
+        reason: &str,
+        include_aggregates: bool,
+    ) -> ChargeSession {
+        let duration_ms = self.last_active_ms.saturating_sub(self.start_ms);
         let charged_percent = self
             .start_capacity
             .zip(self.end_capacity)
             .map(|(start, end)| end - start);
-        Some(ChargeSession {
-            id: self.id,
-            battery_id: self.battery_id,
-            battery_device: self.battery_device,
-            battery_name: self.battery_name,
+        ChargeSession {
+            id: self.id.clone(),
+            battery_id: self.battery_id.clone(),
+            battery_device: self.battery_device.clone(),
+            battery_name: self.battery_name.clone(),
             start_ms: self.start_ms,
             end_ms: self.last_active_ms,
             start_capacity: self.start_capacity,
@@ -256,71 +263,53 @@ impl ActiveSession {
             charged_percent,
             duration_ms,
             charging_ms: self.charging_ms,
-            battery_energy_wh: (self.battery_energy_samples > 0).then_some(self.battery_energy_wh),
-            input_energy_wh: (self.input_energy_samples > 0).then_some(self.input_energy_wh),
-            charged_mah: (self.current_samples > 0).then_some(self.charged_mah),
-            average_battery_power_w: average_power(
-                self.battery_energy_wh,
-                self.battery_power_ms,
-                self.battery_energy_samples,
-            ),
-            average_input_power_w: average_power(
-                self.input_energy_wh,
-                self.input_power_ms,
-                self.input_energy_samples,
-            ),
+            battery_energy_wh: (include_aggregates && self.battery_energy_samples > 0)
+                .then_some(self.battery_energy_wh),
+            input_energy_wh: (include_aggregates && self.input_energy_samples > 0)
+                .then_some(self.input_energy_wh),
+            charged_mah: (include_aggregates && self.current_samples > 0)
+                .then_some(self.charged_mah),
+            average_battery_power_w: include_aggregates
+                .then(|| {
+                    average_power(
+                        self.battery_energy_wh,
+                        self.battery_power_ms,
+                        self.battery_energy_samples,
+                    )
+                })
+                .flatten(),
+            average_input_power_w: include_aggregates
+                .then(|| {
+                    average_power(
+                        self.input_energy_wh,
+                        self.input_power_ms,
+                        self.input_energy_samples,
+                    )
+                })
+                .flatten(),
             peak_input_power_w: self.peak_input_power_w,
-            average_temperature_c: (self.temperature_count > 0)
+            average_temperature_c: (include_aggregates && self.temperature_count > 0)
                 .then(|| self.temperature_sum / self.temperature_count as f64),
             peak_temperature_c: self.peak_temperature_c,
-            source_names: sorted(self.source_names),
-            source_kinds: sorted(self.source_kinds),
-            usb_types: sorted(self.usb_types),
+            source_names: sorted(self.source_names.clone()),
+            source_kinds: sorted(self.source_kinds.clone()),
+            usb_types: sorted(self.usb_types.clone()),
             sample_count: self.sample_count,
             powered_sample_count: self.powered_sample_count,
             health_percent_end: self.end_health_percent,
             cycle_count_end: self.end_cycle_count,
             complete,
             end_reason: reason.to_string(),
-        })
+        }
+    }
+
+    fn finish(self, complete: bool, reason: &str) -> Option<ChargeSession> {
+        self.is_recordable()
+            .then(|| self.build_session(complete, reason, true))
     }
 
     fn preview(&self) -> ChargeSession {
-        self.clone()
-            .finish(false, "active")
-            .unwrap_or_else(|| ChargeSession {
-                id: self.id.clone(),
-                battery_id: self.battery_id.clone(),
-                battery_device: self.battery_device.clone(),
-                battery_name: self.battery_name.clone(),
-                start_ms: self.start_ms,
-                end_ms: self.last_active_ms,
-                start_capacity: self.start_capacity,
-                end_capacity: self.end_capacity,
-                charged_percent: self
-                    .start_capacity
-                    .zip(self.end_capacity)
-                    .map(|(a, b)| b - a),
-                duration_ms: self.last_active_ms.saturating_sub(self.start_ms),
-                charging_ms: self.charging_ms,
-                battery_energy_wh: None,
-                input_energy_wh: None,
-                charged_mah: None,
-                average_battery_power_w: None,
-                average_input_power_w: None,
-                peak_input_power_w: self.peak_input_power_w,
-                average_temperature_c: None,
-                peak_temperature_c: self.peak_temperature_c,
-                source_names: sorted(self.source_names.clone()),
-                source_kinds: sorted(self.source_kinds.clone()),
-                usb_types: sorted(self.usb_types.clone()),
-                sample_count: self.sample_count,
-                powered_sample_count: self.powered_sample_count,
-                health_percent_end: self.end_health_percent,
-                cycle_count_end: self.end_cycle_count,
-                complete: false,
-                end_reason: "active".to_string(),
-            })
+        self.build_session(false, "active", self.is_recordable())
     }
 }
 
@@ -733,6 +722,38 @@ mod tests {
         let mut data = InsightsData::default();
         assert!(data.tick(&[battery("Charging", 20)], &[source(true)], 2_250_000));
         assert_eq!(data.active.len(), 1);
+    }
+
+    #[test]
+    fn active_preview_matches_finish_once_session_is_recordable() {
+        let t0 = 2_300_000;
+        let mut active = ActiveSession::new(&battery("Charging", 20), &[source(true)], t0);
+        active.observe(
+            &battery("Charging", 30),
+            &[source(true)],
+            t0 + MIN_SESSION_MS,
+        );
+
+        let preview = active.preview();
+        let finished = active.finish(false, "active").unwrap();
+
+        assert_eq!(
+            serde_json::to_value(preview).unwrap(),
+            serde_json::to_value(finished).unwrap()
+        );
+    }
+
+    #[test]
+    fn early_active_preview_keeps_aggregate_metrics_hidden() {
+        let active = ActiveSession::new(&battery("Charging", 20), &[source(true)], 2_400_000);
+
+        let preview = active.preview();
+
+        assert_eq!(preview.sample_count, 1);
+        assert_eq!(preview.battery_energy_wh, None);
+        assert_eq!(preview.input_energy_wh, None);
+        assert_eq!(preview.average_temperature_c, None);
+        assert_eq!(preview.peak_temperature_c, Some(32.0));
     }
 
     #[test]
