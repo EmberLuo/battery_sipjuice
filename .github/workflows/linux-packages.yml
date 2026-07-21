@@ -2,6 +2,12 @@ name: Linux Packages
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Create the version tag and publish a GitHub Release after successful builds
+        required: true
+        default: false
+        type: boolean
   push:
     tags:
       - "v*"
@@ -44,14 +50,18 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Verify release tag matches project version
-        if: github.ref_type == 'tag'
+      - name: Verify release version and notes
+        if: github.ref_type == 'tag' || inputs.publish_release
         shell: bash
         run: |
           project_version="$(node -p "require('./package.json').version")"
           expected_tag="v${project_version}"
-          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
             echo "Release tag ${GITHUB_REF_NAME} does not match project version ${project_version}." >&2
+            exit 1
+          fi
+          if [[ ! -f ".github/release-notes/${expected_tag}.md" ]]; then
+            echo "Missing release notes: .github/release-notes/${expected_tag}.md" >&2
             exit 1
           fi
 
@@ -147,8 +157,10 @@ jobs:
           compression-level: 0
 
   release:
-    name: Create GitHub Release
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    name: Create version tag and GitHub Release
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_release)
     needs: build
     runs-on: ubuntu-22.04
     permissions:
@@ -183,11 +195,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          release_notes=".github/release-notes/${GITHUB_REF_NAME}.md"
+          project_version="$(node -p "require('./package.json').version")"
+          release_tag="v${project_version}"
+          release_notes=".github/release-notes/${release_tag}.md"
 
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_tag}" >/dev/null 2>&1; then
+              existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${release_tag}" --jq '.sha')"
+              if [[ "${existing_sha}" != "${GITHUB_SHA}" ]]; then
+                echo "Tag ${release_tag} already points to ${existing_sha}, not ${GITHUB_SHA}." >&2
+                exit 1
+              fi
+            else
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+                -f ref="refs/tags/${release_tag}" \
+                -f sha="${GITHUB_SHA}" >/dev/null
+            fi
+          fi
+
+          if gh release view "${release_tag}" >/dev/null 2>&1; then
             if [[ -f "${release_notes}" ]]; then
-              gh release edit "${GITHUB_REF_NAME}" --notes-file "${release_notes}"
+              gh release edit "${release_tag}" --notes-file "${release_notes}"
             fi
           else
             notes_options=(--generate-notes)
@@ -195,15 +223,15 @@ jobs:
               notes_options=(--notes-file "${release_notes}")
             fi
 
-            gh release create "${GITHUB_REF_NAME}" \
+            gh release create "${release_tag}" \
               --draft \
               --verify-tag \
-              --title "Battery SipJuice ${GITHUB_REF_NAME}" \
+              --title "Battery SipJuice ${release_tag}" \
               "${notes_options[@]}"
           fi
 
-          gh release upload "${GITHUB_REF_NAME}" release-assets/* --clobber
+          gh release upload "${release_tag}" release-assets/* --clobber
 
-          if [[ "$(gh release view "${GITHUB_REF_NAME}" --json isDraft --jq '.isDraft')" == "true" ]]; then
-            gh release edit "${GITHUB_REF_NAME}" --draft=false --latest
+          if [[ "$(gh release view "${release_tag}" --json isDraft --jq '.isDraft')" == "true" ]]; then
+            gh release edit "${release_tag}" --draft=false --latest
           fi
