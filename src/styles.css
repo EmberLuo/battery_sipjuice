@@ -28,26 +28,6 @@
   --accent-inset: rgba(53, 132, 228, 0.22);
 }
 
-:root[data-accent-color="orange"] {
-  --accent: #ff6900;
-  --accent-strong: #e55e00;
-  --accent-soft: rgba(255, 105, 0, 0.12);
-  --accent-hover-border: rgba(255, 105, 0, 0.45);
-  --accent-outline: rgba(255, 105, 0, 0.7);
-  --accent-active-border: rgba(255, 105, 0, 0.72);
-  --accent-inset: rgba(255, 105, 0, 0.22);
-}
-
-:root[data-accent-color="system"] {
-  --accent: #ff6900;
-  --accent-strong: #e55e00;
-  --accent-soft: rgba(255, 105, 0, 0.12);
-  --accent-hover-border: rgba(255, 105, 0, 0.45);
-  --accent-outline: rgba(255, 105, 0, 0.7);
-  --accent-active-border: rgba(255, 105, 0, 0.72);
-  --accent-inset: rgba(255, 105, 0, 0.22);
-}
-
 /* 浅色 */
 :root {
   --bg: #f6f5f4;
@@ -404,7 +384,6 @@ body {
   padding: 4px 10px; border-radius: 999px;
 }
 .src-state.on { background: rgba(46, 194, 126, 0.16); color: var(--good); }
-.src-state.off { background: var(--bg-sunken); color: var(--text-dim); }
 .empty-hint { color: var(--text-dim); font-size: 13.5px; padding: 16px 0; }
 .section-hint { font-size: 12.5px; color: var(--text-dim); margin: 0; }
 
