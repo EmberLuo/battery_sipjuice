@@ -1,0 +1,209 @@
+name: Linux Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }} AppImage/deb/rpm
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+            rust_target: x86_64-unknown-linux-gnu
+            file_arch: x86-64
+            deb_arch: amd64
+            rpm_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            rust_target: aarch64-unknown-linux-gnu
+            file_arch: ARM aarch64
+            deb_arch: arm64
+            rpm_arch: aarch64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify release tag matches project version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          project_version="$(node -p "require('./package.json').version")"
+          expected_tag="v${project_version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Release tag ${GITHUB_REF_NAME} does not match project version ${project_version}." >&2
+            exit 1
+          fi
+
+      - name: Install Linux packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm \
+            wget
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Rust dependencies and build output
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+            !src-tauri/target/release/bundle
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-cargo-
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build AppImage, deb and rpm
+        run: |
+          rm -rf -- src-tauri/target/release/bundle
+          npm run icons:generate
+          npm run tauri -- build --bundles appimage,deb,rpm --ci
+
+      - name: Verify build artifacts
+        shell: bash
+        run: |
+          appimages=(src-tauri/target/release/bundle/appimage/*.AppImage)
+          debs=(src-tauri/target/release/bundle/deb/*.deb)
+          rpms=(src-tauri/target/release/bundle/rpm/*.rpm)
+
+          [[ ${#appimages[@]} -eq 1 && -f "${appimages[0]}" ]]
+          [[ ${#debs[@]} -eq 1 && -f "${debs[0]}" ]]
+          [[ ${#rpms[@]} -eq 1 && -f "${rpms[0]}" ]]
+
+          rpm_db="$(mktemp -d)"
+          file src-tauri/target/release/battery-sipjuice | grep -F "${{ matrix.file_arch }}"
+          file "${appimages[0]}" | grep -F "${{ matrix.file_arch }}"
+          deb_arch="$(dpkg-deb -f "${debs[0]}" Architecture | sed 's/^Architecture: //')"
+          [[ "${deb_arch}" == "${{ matrix.deb_arch }}" ]]
+          [[ "$(rpm --dbpath "${rpm_db}" -qp --qf '%{ARCH}' "${rpms[0]}")" == "${{ matrix.rpm_arch }}" ]]
+
+          ls -lh "${appimages[0]}" "${debs[0]}" "${rpms[0]}"
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: battery-sipjuice-${{ matrix.arch }}-appimage
+          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v7
+        with:
+          name: battery-sipjuice-${{ matrix.arch }}-deb
+          path: src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload rpm
+        uses: actions/upload-artifact@v7
+        with:
+          name: battery-sipjuice-${{ matrix.arch }}-rpm
+          path: src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  release:
+    name: Create GitHub Release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v6
+
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          pattern: battery-sipjuice-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          appimages=(release-assets/*.AppImage)
+          debs=(release-assets/*.deb)
+          rpms=(release-assets/*.rpm)
+
+          [[ ${#appimages[@]} -eq 2 && -f "${appimages[0]}" && -f "${appimages[1]}" ]]
+          [[ ${#debs[@]} -eq 2 && -f "${debs[0]}" && -f "${debs[1]}" ]]
+          [[ ${#rpms[@]} -eq 2 && -f "${rpms[0]}" && -f "${rpms[1]}" ]]
+
+          ls -lh release-assets
+
+      - name: Create release and upload assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_notes=".github/release-notes/${GITHUB_REF_NAME}.md"
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            if [[ -f "${release_notes}" ]]; then
+              gh release edit "${GITHUB_REF_NAME}" --notes-file "${release_notes}"
+            fi
+          else
+            notes_options=(--generate-notes)
+            if [[ -f "${release_notes}" ]]; then
+              notes_options=(--notes-file "${release_notes}")
+            fi
+
+            gh release create "${GITHUB_REF_NAME}" \
+              --draft \
+              --verify-tag \
+              --title "Battery SipJuice ${GITHUB_REF_NAME}" \
+              "${notes_options[@]}"
+          fi
+
+          gh release upload "${GITHUB_REF_NAME}" release-assets/* --clobber
+
+          if [[ "$(gh release view "${GITHUB_REF_NAME}" --json isDraft --jq '.isDraft')" == "true" ]]; then
+            gh release edit "${GITHUB_REF_NAME}" --draft=false --latest
+          fi

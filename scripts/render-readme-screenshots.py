@@ -21,6 +21,7 @@ from gi.repository import GLib, Gtk, WebKit2  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "docs" / "screenshots"
 OUTPUT.mkdir(parents=True, exist_ok=True)
+APP_VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
 
 NOW = 1_784_530_800_000
 
@@ -191,7 +192,7 @@ MOCK_SCRIPT = f"""
       case "get_settings":
         return settings;
       case "get_app_version":
-        return "0.4.1";
+        return {json.dumps(APP_VERSION)};
       case "get_system_accent_color":
         return null;
       case "get_battery_insights":
