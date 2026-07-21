@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/EmberLuo/battery_sipjuice/actions/workflows/linux-x64-packages.yml"><img src="https://github.com/EmberLuo/battery_sipjuice/actions/workflows/linux-x64-packages.yml/badge.svg" alt="Linux 安装包构建"></a>
+  <a href="https://github.com/EmberLuo/battery_sipjuice/actions/workflows/linux-packages.yml"><img src="https://github.com/EmberLuo/battery_sipjuice/actions/workflows/linux-packages.yml/badge.svg" alt="Linux 安装包构建"></a>
   <img src="https://img.shields.io/badge/platform-Linux-FCC624?logo=linux&logoColor=black" alt="Linux">
   <img src="https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white" alt="Tauri v2">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2ea44f" alt="Apache License 2.0"></a>
