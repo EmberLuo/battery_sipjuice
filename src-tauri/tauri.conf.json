@@ -45,10 +45,26 @@
       "icons/64x64.png",
       "icons/96x96.png",
       "icons/128x128.png",
-      "icons/128x128@2x.png",
       "icons/256x256.png",
       "icons/icon.png"
     ],
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/share/icons/hicolor/scalable/apps/battery-sipjuice.svg": "../src/app-icon.svg"
+        }
+      },
+      "deb": {
+        "files": {
+          "/usr/share/icons/hicolor/scalable/apps/battery-sipjuice.svg": "../src/app-icon.svg"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/share/icons/hicolor/scalable/apps/battery-sipjuice.svg": "../src/app-icon.svg"
+        }
+      }
+    },
     "category": "Utility",
     "shortDescription": "本机电池监控与健康管理",
     "longDescription": "Battery SipJuice — Linux 电源工具：电池健康、实时电气量、充放电监控、温度与电池养护提醒。"

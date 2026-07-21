@@ -43,9 +43,9 @@ function generatePngs(iconSource, iconOutput, sizes) {
 
 generatePngs(source, output, [16, 24, 32, 48, 64, 96, 128, 256, 512]);
 
-copyFileSync(resolve(output, "256x256.png"), resolve(output, "128x128@2x.png"));
 copyFileSync(resolve(output, "512x512.png"), resolve(output, "icon.png"));
 rmSync(resolve(output, "512x512.png"));
+rmSync(resolve(output, "128x128@2x.png"), { force: true });
 
 const trayTemp = mkdtempSync(join(tmpdir(), "battery-sipjuice-tray-"));
 try {

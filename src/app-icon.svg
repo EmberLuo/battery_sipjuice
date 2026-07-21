@@ -5,38 +5,65 @@
       <stop offset="0.5" stop-color="#ff6a00"/>
       <stop offset="1" stop-color="#e04700"/>
     </linearGradient>
-    <filter id="surface-shadow" x="-8%" y="-8%" width="116%" height="135%">
-      <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#702400" flood-opacity="0.2"/>
-    </filter>
-    <filter id="glyph-shadow" x="-4%" y="-4%" width="108%" height="121%">
-      <feDropShadow dx="0" dy="1.5" stdDeviation="1.25" flood-color="#9c3600" flood-opacity="0.2"/>
-    </filter>
+    <linearGradient id="glyph-surface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="0.55" stop-color="#fbfcfd"/>
+      <stop offset="1" stop-color="#edf1f5"/>
+    </linearGradient>
   </defs>
   <rect
-    x="20"
-    y="20"
-    width="472"
-    height="472"
-    rx="112"
-    fill="url(#orange-surface)"
-    filter="url(#surface-shadow)"/>
-  <g filter="url(#glyph-shadow)">
+    x="4"
+    y="4"
+    width="504"
+    height="504"
+    rx="120"
+    fill="url(#orange-surface)"/>
+  <rect
+    x="8"
+    y="8"
+    width="496"
+    height="496"
+    rx="116"
+    fill="none"
+    stroke="#fff"
+    stroke-opacity="0.1"
+    stroke-width="4"/>
+  <g transform="translate(0 4)" opacity="0.18">
     <path
       d="M138 106h236l-31 176c-9 50-45 84-87 84s-78-34-87-84L138 106Z"
       fill="none"
-      stroke="#fff"
+      stroke="#9c3600"
       stroke-width="30"
       stroke-linejoin="round"/>
     <path
       d="M256 366v58M188 424h136"
       fill="none"
-      stroke="#fff"
+      stroke="#9c3600"
       stroke-width="30"
       stroke-linecap="round"
       stroke-linejoin="round"/>
     <path
       d="M278 157 203 269h53l-22 93 83-125h-57l18-80Z"
-      fill="#fff"
+      fill="#9c3600"
+      transform="translate(0 -28)"/>
+  </g>
+  <g>
+    <path
+      d="M138 106h236l-31 176c-9 50-45 84-87 84s-78-34-87-84L138 106Z"
+      fill="none"
+      stroke="url(#glyph-surface)"
+      stroke-width="30"
+      stroke-linejoin="round"/>
+    <path
+      d="M256 366v58M188 424h136"
+      fill="none"
+      stroke="url(#glyph-surface)"
+      stroke-width="30"
+      stroke-linecap="round"
+      stroke-linejoin="round"/>
+    <path
+      d="M278 157 203 269h53l-22 93 83-125h-57l18-80Z"
+      fill="url(#glyph-surface)"
       transform="translate(0 -28)"/>
   </g>
 </svg>
